@@ -11,7 +11,6 @@ npm run dev:full
 
 - Frontend: `http://localhost:5173`
 - API: `http://localhost:8787/api`
-- SQLite: `server/agent-activity.sqlite` (override with `AGENT_DB_PATH`)
 
 If you only want one service:
 
@@ -26,8 +25,6 @@ npm run api      # API only
 
 - `GET /api/snapshot`
 - `POST /api/sync/activity`
-- `GET /api/openclaw/snapshot`
-- `GET /api/openclaw/changes?cursor=<cursor>&limit=<n>`
 
 ### Agents
 
