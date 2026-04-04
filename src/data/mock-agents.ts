@@ -109,7 +109,7 @@ export const emails: EmailActivity[] = [
   { id: "EMAIL-006", subject: "Meeting notes: Architecture review", from: "cto@company.com", readBy: "steve", timestamp: new Date(Date.now() - 172800000), action: "archived", status: "read", summary: "Architecture review notes. Archived for reference." },
 ];
 
-export const activityFeed: ActivityEvent[] = [
+export const activityFeed = [
   { id: "EVT-001", agentId: "josh", type: "task_start", description: "Started validating ticket #4821", timestamp: new Date(Date.now() - 180000) },
   { id: "EVT-002", agentId: "joey", type: "email_read", description: "Read email: Infrastructure scaling request Q2", timestamp: new Date(Date.now() - 900000) },
   { id: "EVT-003", agentId: "josh", type: "handoff", description: "Handed off TASK-006 to Joey", timestamp: new Date(Date.now() - 300000) },
