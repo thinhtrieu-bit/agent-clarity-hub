@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -101,5 +102,10 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    font-family: "Space Grotesk", "Segoe UI", sans-serif;
+    background-image:
+      radial-gradient(circle at 10% 15%, hsl(214 95% 94% / 0.8), transparent 30%),
+      radial-gradient(circle at 80% 10%, hsl(142 75% 90% / 0.7), transparent 32%),
+      linear-gradient(180deg, hsl(var(--background)) 0%, hsl(210 40% 99%) 100%);
   }
 }

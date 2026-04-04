@@ -1,38 +1,41 @@
-import { activityFeed, getAgentById } from "@/data/mock-agents";
+import { ActivityEvent } from "@/types/agent-types";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { formatDistanceToNow } from "date-fns";
-import { ArrowRightLeft, CheckCircle2, Mail, MessageSquare, PlayCircle, AlertCircle } from "lucide-react";
 
-const iconMap: Record<string, React.ElementType> = {
-  task_start: PlayCircle, task_complete: CheckCircle2,
-  handoff: ArrowRightLeft, email_read: Mail,
-  message: MessageSquare, error: AlertCircle,
-};
+function tone(category: ActivityEvent["category"]) {
+  if (category === "task") return "default";
+  if (category === "email") return "secondary";
+  return "outline";
+}
 
-export function ActivityFeed() {
+export default function ActivityFeed({ events }: { events: ActivityEvent[] }) {
+  const sorted = [...events].sort((a, b) => +new Date(b.timestamp) - +new Date(a.timestamp));
+
   return (
-    <ScrollArea className="h-[340px]">
-      <div className="space-y-3 pr-3">
-        {activityFeed.map((event) => {
-          const agent = getAgentById(event.agentId);
-          const Icon = iconMap[event.type] || MessageSquare;
-          return (
-            <div key={event.id} className="flex items-start gap-3 text-sm">
-              <Avatar className="h-7 w-7 mt-0.5 shrink-0">
-                <AvatarFallback style={{ backgroundColor: agent?.avatarColor }} className="text-xs text-white">
-                  {agent?.name[0]}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1 min-w-0">
-                <p className="text-foreground">{event.description}</p>
-                <p className="text-xs text-muted-foreground">{formatDistanceToNow(event.timestamp, { addSuffix: true })}</p>
+    <Card className="border-border/70">
+      <CardHeader>
+        <CardTitle className="text-base">Live Activity Feed</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ScrollArea className="h-[360px] pr-4">
+          <div className="space-y-3">
+            {sorted.map((event) => (
+              <div key={event.id} className="rounded-lg border border-border/60 bg-card px-3 py-2">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <Badge variant={tone(event.category)} className="capitalize">
+                    {event.category}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(event.timestamp).toLocaleTimeString()}
+                  </span>
+                </div>
+                <p className="text-sm">{event.summary}</p>
               </div>
-              <Icon className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-            </div>
-          );
-        })}
-      </div>
-    </ScrollArea>
+            ))}
+          </div>
+        </ScrollArea>
+      </CardContent>
+    </Card>
   );
 }

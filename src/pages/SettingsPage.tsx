@@ -1,58 +1,72 @@
-import { agents } from "@/data/mock-agents";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ArrowRight } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { useAgentActivity } from "@/context/AgentActivityProvider";
 
 export default function SettingsPage() {
+  const { data, loading, error } = useAgentActivity();
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [handoffAlerts, setHandoffAlerts] = useState(true);
+  const [autoEscalation, setAutoEscalation] = useState(false);
+  const [pipelineOrder, setPipelineOrder] = useState("Josh > Joey > Steve > Hulk");
+
+  if (loading) {
+    return <p className="text-sm text-muted-foreground">Loading settings...</p>;
+  }
+  if (error || !data) {
+    return <p className="text-sm text-destructive">Unable to load settings data: {error || "No data"}</p>;
+  }
+
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-foreground">Settings</h2>
-
-      <Card>
-        <CardHeader><CardTitle className="text-base">Pipeline Order</CardTitle></CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-3 flex-wrap">
-            {agents.map((a, i) => (
-              <div key={a.id} className="flex items-center gap-3">
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg border">
-                  <Avatar className="h-7 w-7"><AvatarFallback style={{ backgroundColor: a.avatarColor, color: "white" }} className="text-xs">{a.name[0]}</AvatarFallback></Avatar>
-                  <span className="text-sm font-medium">{a.name}</span>
-                </div>
-                {i < agents.length - 1 && <ArrowRight className="h-4 w-4 text-muted-foreground" />}
+    <div className="space-y-4">
+      <Card className="border-border/70">
+        <CardHeader>
+          <CardTitle className="text-base">Agent Configuration</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-2">
+          {data.agents.map((agent) => (
+            <div key={agent.id} className="rounded-lg border border-border/60 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="font-medium">{agent.name}</p>
+                <Badge variant="outline">{agent.role}</Badge>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle className="text-base">Agent Roles & Permissions</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          {agents.map((a) => (
-            <div key={a.id}>
-              <div className="flex items-center gap-3 mb-2">
-                <Avatar className="h-8 w-8"><AvatarFallback style={{ backgroundColor: a.avatarColor, color: "white" }}>{a.name[0]}</AvatarFallback></Avatar>
-                <div><p className="font-medium text-sm">{a.name}</p><p className="text-xs text-muted-foreground">{a.role}</p></div>
-              </div>
-              <div className="flex flex-wrap gap-1.5 ml-11">
-                {a.capabilities.map((c) => <Badge key={c} variant="secondary" className="text-xs">{c}</Badge>)}
-              </div>
-              <Separator className="mt-4" />
+              <p className="text-sm text-muted-foreground">
+                Capabilities: {agent.capabilities.join(", ")}
+              </p>
             </div>
           ))}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle className="text-base">Governance Rules</CardTitle></CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>• Agents do not invent approvals or skip role boundaries</p>
-          <p>• Jira comments only posted through the approved path (Joey)</p>
-          <p>• Email access requires explicit user permission per integration</p>
-          <p>• All handoffs include context notes and timestamps</p>
-          <p>• Pipeline order cannot be modified during active tasks</p>
+      <Card className="border-border/70">
+        <CardHeader>
+          <CardTitle className="text-base">Pipeline Order</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Input value={pipelineOrder} onChange={(e) => setPipelineOrder(e.target.value)} />
+          <p className="text-sm text-muted-foreground">Change execution flow when orchestrator APIs are connected.</p>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/70">
+        <CardHeader>
+          <CardTitle className="text-base">Notification Preferences</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex items-center justify-between">
+            <span>Email processing alerts</span>
+            <Switch checked={emailNotifications} onCheckedChange={setEmailNotifications} />
+          </label>
+          <label className="flex items-center justify-between">
+            <span>Handoff transition alerts</span>
+            <Switch checked={handoffAlerts} onCheckedChange={setHandoffAlerts} />
+          </label>
+          <label className="flex items-center justify-between">
+            <span>Auto escalation on blocked tasks</span>
+            <Switch checked={autoEscalation} onCheckedChange={setAutoEscalation} />
+          </label>
         </CardContent>
       </Card>
     </div>

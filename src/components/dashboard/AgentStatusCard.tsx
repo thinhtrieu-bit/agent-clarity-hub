@@ -1,47 +1,47 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Activity, Clock3 } from "lucide-react";
+import { Agent, AgentTask } from "@/types/agent-types";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Agent } from "@/types/agent-types";
-import { formatDistanceToNow } from "date-fns";
 
-const statusConfig: Record<string, { label: string; className: string }> = {
-  active: { label: "Active", className: "bg-green-500/15 text-green-700 border-green-500/30" },
-  idle: { label: "Idle", className: "bg-muted text-muted-foreground" },
-  waiting: { label: "Waiting", className: "bg-yellow-500/15 text-yellow-700 border-yellow-500/30" },
-  error: { label: "Error", className: "bg-destructive/15 text-destructive border-destructive/30" },
-};
+function statusTone(status: Agent["status"]) {
+  if (status === "active") return "bg-emerald-500";
+  if (status === "waiting") return "bg-amber-500";
+  return "bg-slate-400";
+}
 
-interface Props { agent: Agent; onClick?: () => void; }
-
-export function AgentStatusCard({ agent, onClick }: Props) {
-  const cfg = statusConfig[agent.status];
+export default function AgentStatusCard({ agent, tasks }: { agent: Agent; tasks: AgentTask[] }) {
+  const task = tasks.find((entry) => entry.id === agent.currentTaskId);
   return (
-    <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={onClick}>
-      <CardHeader className="flex flex-row items-center gap-3 pb-2">
-        <Avatar className="h-10 w-10">
-          <AvatarFallback style={{ backgroundColor: agent.avatarColor, color: "white" }}>
-            {agent.name[0]}
-          </AvatarFallback>
-        </Avatar>
-        <div className="flex-1 min-w-0">
-          <CardTitle className="text-base">{agent.name}</CardTitle>
-          <p className="text-xs text-muted-foreground truncate">{agent.role}</p>
-        </div>
-        <div className="relative">
-          <Badge variant="outline" className={cfg.className}>{cfg.label}</Badge>
-          {agent.status === "active" && (
-            <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse" />
-          )}
+    <Card className="overflow-hidden border-border/70 bg-card/90 shadow-sm">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Avatar className={`h-10 w-10 ${agent.avatarColor}`}>
+              <AvatarFallback className="bg-transparent font-semibold text-white">
+                {agent.name.slice(0, 2).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <CardTitle className="text-base">{agent.name}</CardTitle>
+              <p className="text-xs text-muted-foreground">{agent.role}</p>
+            </div>
+          </div>
+          <Badge variant="outline" className="capitalize">
+            <span className={`mr-2 inline-flex h-2 w-2 rounded-full ${statusTone(agent.status)}`} />
+            {agent.status}
+          </Badge>
         </div>
       </CardHeader>
-      <CardContent className="pt-0">
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>Tasks: {agent.tasksCompleted}</span>
-          <span>{formatDistanceToNow(agent.lastActive, { addSuffix: true })}</span>
+      <CardContent className="space-y-2 text-sm">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Activity className="h-4 w-4" />
+          <span className="truncate">{task ? task.title : "No active task"}</span>
         </div>
-        {agent.currentTask && (
-          <p className="text-xs mt-1 font-mono text-primary">{agent.currentTask}</p>
-        )}
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Clock3 className="h-4 w-4" />
+          <span>Last active: {new Date(agent.lastActiveAt).toLocaleTimeString()}</span>
+        </div>
       </CardContent>
     </Card>
   );

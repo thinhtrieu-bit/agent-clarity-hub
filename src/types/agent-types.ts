@@ -1,28 +1,31 @@
-export type AgentStatus = "active" | "idle" | "waiting" | "error";
-export type TaskStage = "josh" | "joey" | "steve" | "hulk" | "completed";
-export type TaskStatus = "pending" | "in_progress" | "completed" | "failed";
-export type MessageType = "handoff" | "query" | "response" | "system";
-export type EmailStatus = "unread" | "read" | "processed" | "flagged" | "ignored";
-export type EmailAction = "forwarded" | "replied" | "archived" | "escalated" | "none";
+export type AgentId = "josh" | "joey" | "steve" | "hulk";
+
+export type AgentStatus = "idle" | "active" | "waiting";
+
+export type TaskStage = "josh" | "joey" | "steve" | "hulk";
+
+export type TaskStatus = "queued" | "in_progress" | "waiting" | "blocked" | "completed";
+
+export type MessageType = "handoff" | "query" | "response";
+
+export type EmailStatus = "read" | "processed" | "flagged" | "ignored";
 
 export interface Agent {
-  id: string;
+  id: AgentId;
   name: string;
   role: string;
-  description: string;
   status: AgentStatus;
   avatarColor: string;
   capabilities: string[];
-  currentTask: string | null;
-  lastActive: Date;
-  tasksCompleted: number;
+  currentTaskId?: string;
+  lastActiveAt: string;
 }
 
 export interface TaskHandoff {
-  fromAgent: string;
-  toAgent: string;
-  timestamp: Date;
-  notes: string;
+  from: AgentId;
+  to: AgentId;
+  at: string;
+  note: string;
 }
 
 export interface AgentTask {
@@ -30,21 +33,21 @@ export interface AgentTask {
   title: string;
   description: string;
   stage: TaskStage;
-  assignedAgent: string;
+  assignedAgent: AgentId;
   status: TaskStatus;
-  createdAt: Date;
-  updatedAt: Date;
-  completedAt: Date | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
   handoffs: TaskHandoff[];
 }
 
 export interface AgentMessage {
   id: string;
-  fromAgent: string;
-  toAgent: string;
+  from: AgentId;
+  to: AgentId;
   content: string;
-  taskId: string | null;
-  timestamp: Date;
+  taskId: string;
+  timestamp: string;
   type: MessageType;
 }
 
@@ -52,18 +55,23 @@ export interface EmailActivity {
   id: string;
   subject: string;
   from: string;
-  readBy: string;
-  timestamp: Date;
-  action: EmailAction;
+  readBy: AgentId;
+  timestamp: string;
+  action: string;
   status: EmailStatus;
-  summary: string;
 }
 
 export interface ActivityEvent {
   id: string;
-  agentId: string;
-  type: "task_start" | "task_complete" | "handoff" | "email_read" | "message" | "error";
-  description: string;
-  timestamp: Date;
-  metadata?: Record<string, string>;
+  timestamp: string;
+  category: "agent" | "task" | "message" | "email";
+  summary: string;
+  entities: string[];
+}
+
+export interface DashboardMetrics {
+  tasksCompletedToday: number;
+  avgPipelineTimeMinutes: number;
+  activeConversations: number;
+  emailsProcessed: number;
 }

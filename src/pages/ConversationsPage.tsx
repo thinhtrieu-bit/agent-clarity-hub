@@ -1,49 +1,60 @@
-import { messages, agents } from "@/data/mock-agents";
-import { ConversationThread } from "@/components/dashboard/ConversationThread";
+import { useState } from "react";
+import ConversationThread from "@/components/dashboard/ConversationThread";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useState, useMemo } from "react";
+import { useAgentActivity } from "@/context/AgentActivityProvider";
+
+const pairOptions = [
+  { value: "all", label: "All pairs" },
+  { value: "josh-joey", label: "Josh ↔ Joey" },
+  { value: "joey-steve", label: "Joey ↔ Steve" },
+  { value: "steve-hulk", label: "Steve ↔ Hulk" },
+  { value: "josh-hulk", label: "Josh ↔ Hulk" },
+];
 
 export default function ConversationsPage() {
-  const [filterAgent, setFilterAgent] = useState<string>("all");
+  const { data, loading, error } = useAgentActivity();
+  const [pair, setPair] = useState("all");
+  const [taskId, setTaskId] = useState("all");
 
-  const filtered = useMemo(() => {
-    if (filterAgent === "all") return messages;
-    return messages.filter((m) => m.fromAgent === filterAgent || m.toAgent === filterAgent);
-  }, [filterAgent]);
-
-  // Group by task
-  const grouped = useMemo(() => {
-    const map = new Map<string, typeof messages>();
-    filtered.forEach((m) => {
-      const key = m.taskId || "general";
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(m);
-    });
-    return Array.from(map.entries());
-  }, [filtered]);
+  if (loading) {
+    return <p className="text-sm text-muted-foreground">Loading conversations...</p>;
+  }
+  if (error || !data) {
+    return <p className="text-sm text-destructive">Unable to load conversations: {error || "No data"}</p>;
+  }
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-foreground">Conversations</h2>
-      <Select value={filterAgent} onValueChange={setFilterAgent}>
-        <SelectTrigger className="w-[160px]"><SelectValue placeholder="Filter agent" /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Agents</SelectItem>
-          {agents.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-        </SelectContent>
-      </Select>
+    <div className="space-y-4">
+      <Card className="border-border/70">
+        <CardHeader>
+          <CardTitle className="text-base">Inter-agent Conversations</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 md:grid-cols-3">
+            <select className="rounded-md border bg-background px-3 text-sm" value={pair} onChange={(e) => setPair(e.target.value)}>
+              {pairOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <select className="rounded-md border bg-background px-3 text-sm" value={taskId} onChange={(e) => setTaskId(e.target.value)}>
+              <option value="all">All tasks</option>
+              {data.tasks.map((task) => (
+                <option key={task.id} value={task.id}>
+                  {task.id}
+                </option>
+              ))}
+            </select>
+          </div>
+        </CardContent>
+      </Card>
 
-      <div className="space-y-4">
-        {grouped.map(([taskId, msgs]) => (
-          <Card key={taskId}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-mono">{taskId === "general" ? "General" : taskId}</CardTitle>
-            </CardHeader>
-            <CardContent><ConversationThread messages={msgs} /></CardContent>
-          </Card>
-        ))}
-      </div>
+      <ConversationThread
+        messages={data.messages}
+        pair={pair === "all" ? undefined : pair}
+        taskId={taskId === "all" ? undefined : taskId}
+      />
     </div>
   );
 }

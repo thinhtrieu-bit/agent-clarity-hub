@@ -1,45 +1,63 @@
-import { AgentMessage } from "@/types/agent-types";
-import { getAgentById } from "@/data/mock-agents";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { AgentId, AgentMessage } from "@/types/agent-types";
 import { Badge } from "@/components/ui/badge";
-import { formatDistanceToNow } from "date-fns";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
-const typeBadge: Record<string, string> = {
-  handoff: "bg-blue-500/15 text-blue-700 border-blue-500/30",
-  query: "bg-yellow-500/15 text-yellow-700 border-yellow-500/30",
-  response: "bg-green-500/15 text-green-700 border-green-500/30",
-  system: "bg-muted text-muted-foreground",
+const agentNames: Record<AgentId, string> = {
+  josh: "Josh",
+  joey: "Joey",
+  steve: "Steve",
+  hulk: "Hulk",
 };
 
-interface Props { messages: AgentMessage[]; }
+export default function ConversationThread({
+  messages,
+  taskId,
+  pair,
+}: {
+  messages: AgentMessage[];
+  taskId?: string;
+  pair?: string;
+}) {
+  const filtered = messages
+    .filter((message) => {
+      const byTask = taskId ? message.taskId === taskId : true;
+      const byPair = pair
+        ? `${message.from}-${message.to}` === pair || `${message.to}-${message.from}` === pair
+        : true;
+      return byTask && byPair;
+    })
+    .sort((a, b) => +new Date(b.timestamp) - +new Date(a.timestamp));
 
-export function ConversationThread({ messages }: Props) {
   return (
-    <div className="space-y-4">
-      {messages.map((msg) => {
-        const from = getAgentById(msg.fromAgent);
-        const to = getAgentById(msg.toAgent);
-        return (
-          <div key={msg.id} className="flex gap-3">
-            <Avatar className="h-8 w-8 shrink-0">
-              <AvatarFallback style={{ backgroundColor: from?.avatarColor }} className="text-xs text-white">
-                {from?.name[0] ?? "?"}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0 space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-medium text-sm">{from?.name ?? msg.fromAgent}</span>
-                <span className="text-muted-foreground text-xs">→</span>
-                <span className="text-sm text-muted-foreground">{to?.name ?? msg.toAgent}</span>
-                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${typeBadge[msg.type] ?? ""}`}>{msg.type}</Badge>
-                {msg.taskId && <span className="text-[10px] font-mono text-muted-foreground">{msg.taskId}</span>}
+    <Card className="border-border/70">
+      <CardHeader>
+        <CardTitle className="text-base">Conversation Thread</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <ScrollArea className="h-[460px] pr-4">
+          <div className="space-y-3">
+            {filtered.map((message) => (
+              <div key={message.id} className="rounded-lg border border-border/60 bg-card p-3">
+                <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <Badge variant="outline" className="capitalize">
+                    {message.type}
+                  </Badge>
+                  <span>{agentNames[message.from]}</span>
+                  <span>→</span>
+                  <span>{agentNames[message.to]}</span>
+                  <span>·</span>
+                  <span>{message.taskId}</span>
+                  <span>·</span>
+                  <span>{new Date(message.timestamp).toLocaleString()}</span>
+                </div>
+                <p className="text-sm leading-relaxed">{message.content}</p>
               </div>
-              <p className="text-sm text-foreground">{msg.content}</p>
-              <p className="text-xs text-muted-foreground">{formatDistanceToNow(msg.timestamp, { addSuffix: true })}</p>
-            </div>
+            ))}
+            {!filtered.length && <p className="text-sm text-muted-foreground">No messages match this filter.</p>}
           </div>
-        );
-      })}
-    </div>
+        </ScrollArea>
+      </CardContent>
+    </Card>
   );
 }
