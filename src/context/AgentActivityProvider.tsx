@@ -6,7 +6,7 @@ import {
   updateAgent as apiUpdateAgent,
   updateTask as apiUpdateTask,
 } from "@/api/agent-activity-api";
-import { Agent, AgentMessage, AgentTask, EmailActivity, ActivityEvent } from "@/types/agent-types";
+import { Agent, AgentTask } from "@/types/agent-types";
 import { supabase } from "@/integrations/supabase/client";
 
 type AgentActivityContextValue = {
@@ -21,34 +21,6 @@ type AgentActivityContextValue = {
 
 const AgentActivityContext = createContext<AgentActivityContextValue | null>(null);
 
-function buildMetrics(tasks: AgentTask[], messages: AgentMessage[], emails: EmailActivity[]) {
-  const completedToday = tasks.filter((task) => Boolean(task.completedAt)).length;
-  const durations = tasks
-    .filter((task) => task.completedAt)
-    .map((task) => (new Date(task.completedAt!).getTime() - new Date(task.createdAt).getTime()) / (1000 * 60));
-  const avgPipelineTimeMinutes = durations.length
-    ? Math.round(durations.reduce((sum, duration) => sum + duration, 0) / durations.length)
-    : 0;
-  const activeConversations = new Set(messages.map((message) => `${message.from}-${message.to}-${message.taskId}`)).size;
-  const emailsProcessed = emails.filter((email) => email.status === "processed").length;
-
-  return {
-    tasksCompletedToday: completedToday,
-    avgPipelineTimeMinutes,
-    activeConversations,
-    emailsProcessed,
-  };
-}
-
-async function readTablePayload<T>(table: string): Promise<T[]> {
-  if (!supabase) return [];
-  const { data, error } = await supabase.from(table).select("payload_json, updated_at").order("updated_at", { ascending: false });
-  if (error) {
-    throw new Error(error.message);
-  }
-  return (data || []).map((row) => row.payload_json as T);
-}
-
 export function AgentActivityProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<DashboardSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -58,27 +30,8 @@ export function AgentActivityProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     try {
       setError(null);
-      if (supabase) {
-        const [agents, tasks, messages, emails, events] = await Promise.all([
-          readTablePayload<Agent>("agents"),
-          readTablePayload<AgentTask>("tasks"),
-          readTablePayload<AgentMessage>("messages"),
-          readTablePayload<EmailActivity>("emails"),
-          readTablePayload<ActivityEvent>("events"),
-        ]);
-        setData({
-          agents,
-          tasks,
-          messages,
-          emails,
-          events,
-          metrics: buildMetrics(tasks, messages, emails),
-          syncedAt: new Date().toISOString(),
-        });
-      } else {
-        const snapshot = await getSnapshot();
-        setData(snapshot);
-      }
+      const snapshot = await getSnapshot();
+      setData(snapshot);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch snapshot");
     } finally {
