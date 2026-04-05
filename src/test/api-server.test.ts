@@ -145,10 +145,12 @@ describe("OpenClaw-ready SQLite activity store", () => {
 
 describe("OpenClaw Express API", () => {
   const cleanupPaths: string[] = [];
+  const originalApiKey = process.env.OPENCLAW_API_KEY;
   let server: ReturnType<typeof createServer> | null = null;
   let apiBase = "";
 
   beforeEach(async () => {
+    process.env.OPENCLAW_API_KEY = "test-openclaw-api-key";
     const dbPath = makeDbPath();
     cleanupPaths.push(dbPath);
     const { app, close } = createApp({ dbPath });
@@ -175,6 +177,7 @@ describe("OpenClaw Express API", () => {
       });
     }
     server = null;
+    process.env.OPENCLAW_API_KEY = originalApiKey;
     cleanupPaths.forEach((dbPath) => {
       try {
         rmSync(dbPath, { force: true });
@@ -186,10 +189,13 @@ describe("OpenClaw Express API", () => {
   });
 
   async function request(path: string, init?: RequestInit) {
+    const requestHeaders = new Headers(init?.headers);
+    const authHeaders = requestHeaders.has("authorization") ? {} : { Authorization: "Bearer test-openclaw-api-key" };
     const response = await fetch(`${apiBase}${path}`, {
       headers: {
         "Content-Type": "application/json",
-        ...(init?.headers || {}),
+        ...authHeaders,
+        ...Object.fromEntries(requestHeaders.entries()),
       },
       ...init,
     });
@@ -197,6 +203,32 @@ describe("OpenClaw Express API", () => {
     const body = text ? JSON.parse(text) : null;
     return { response, body };
   }
+
+  it("rejects unauthenticated writes and leaves read endpoints public", async () => {
+    const unauthorizedWrite = await request("/api/tasks", {
+      method: "POST",
+      headers: { Authorization: "" },
+      body: JSON.stringify({ title: "Blocked task" }),
+    });
+    expect(unauthorizedWrite.response.status).toBe(401);
+    expect(unauthorizedWrite.body.error).toBe("Unauthorized");
+
+    const publicRead = await fetch(`${apiBase}/api/openclaw/snapshot`);
+    expect(publicRead.status).toBe(200);
+  });
+
+  it("returns 500 for write routes when OPENCLAW_API_KEY is not configured", async () => {
+    delete process.env.OPENCLAW_API_KEY;
+    const result = await request("/api/tasks", {
+      method: "POST",
+      body: JSON.stringify({ title: "Needs config" }),
+    });
+
+    expect(result.response.status).toBe(500);
+    expect(result.body.error).toBe("OPENCLAW_API_KEY is not configured");
+
+    process.env.OPENCLAW_API_KEY = "test-openclaw-api-key";
+  });
 
   it("rejects invalid task creation payloads with 400", async () => {
     const { response, body } = await request("/api/tasks", {

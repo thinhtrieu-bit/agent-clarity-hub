@@ -8,6 +8,9 @@ info:
     Validation errors return HTTP 400 with { error, details[] }.
 servers:
   - url: http://localhost:8787
+security:
+  - OpenClawBearerAuth: []
+  - OpenClawHeaderKey: []
 paths:
   /api/health:
     get:
@@ -81,6 +84,9 @@ paths:
   /api/sync/activity:
     post:
       summary: Simulate sync tick and persist updates
+      security:
+        - OpenClawBearerAuth: []
+        - OpenClawHeaderKey: []
       responses:
         "200":
           description: Updated snapshot
@@ -88,6 +94,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DashboardSnapshot"
+        "401":
+          description: Missing or invalid OpenClaw API key
+        "500":
+          description: OPENCLAW_API_KEY is not configured
   /api/agents:
     get:
       summary: List agents
@@ -103,6 +113,9 @@ paths:
   /api/agents/{id}:
     patch:
       summary: Update agent
+      security:
+        - OpenClawBearerAuth: []
+        - OpenClawHeaderKey: []
       parameters:
         - in: path
           name: id
@@ -128,6 +141,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid OpenClaw API key
+        "500":
+          description: OPENCLAW_API_KEY is not configured
         "404":
           description: Agent not found
   /api/tasks:
@@ -153,6 +170,9 @@ paths:
                   $ref: "#/components/schemas/Task"
     post:
       summary: Create task
+      security:
+        - OpenClawBearerAuth: []
+        - OpenClawHeaderKey: []
       requestBody:
         required: true
         content:
@@ -172,9 +192,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid OpenClaw API key
+        "500":
+          description: OPENCLAW_API_KEY is not configured
   /api/tasks/{id}:
     patch:
       summary: Update task
+      security:
+        - OpenClawBearerAuth: []
+        - OpenClawHeaderKey: []
       parameters:
         - in: path
           name: id
@@ -200,6 +227,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid OpenClaw API key
+        "500":
+          description: OPENCLAW_API_KEY is not configured
         "404":
           description: Task not found
   /api/messages:
@@ -216,6 +247,9 @@ paths:
                   $ref: "#/components/schemas/Message"
     post:
       summary: Create message
+      security:
+        - OpenClawBearerAuth: []
+        - OpenClawHeaderKey: []
       requestBody:
         required: true
         content:
@@ -235,6 +269,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid OpenClaw API key
+        "500":
+          description: OPENCLAW_API_KEY is not configured
   /api/emails:
     get:
       summary: List email activities
@@ -260,6 +298,17 @@ paths:
                 items:
                   $ref: "#/components/schemas/Event"
 components:
+  securitySchemes:
+    OpenClawBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API key
+      description: Send the shared `OPENCLAW_API_KEY` as `Authorization: Bearer <key>`.
+    OpenClawHeaderKey:
+      type: apiKey
+      in: header
+      name: x-openclaw-key
+      description: Alternate header for clients that cannot set bearer auth.
   schemas:
     AgentId:
       type: string

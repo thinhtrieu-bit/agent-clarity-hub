@@ -1,5 +1,6 @@
 import cors from "cors";
 import express from "express";
+import { timingSafeEqual } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { createStore } from "./store-factory.js";
 import { AGENT_NAME_BY_ID, STAGE_ORDER } from "./seed-data.js";
@@ -157,6 +158,39 @@ function asyncRoute(handler) {
   return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 }
 
+function matchesApiKey(expectedKey, providedKey) {
+  if (!expectedKey || !providedKey) return false;
+  const expected = Buffer.from(expectedKey);
+  const provided = Buffer.from(providedKey);
+  if (expected.length !== provided.length) return false;
+  return timingSafeEqual(expected, provided);
+}
+
+function getOpenClawApiKey(req) {
+  const authHeader = req.headers.authorization;
+  if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+    return authHeader.slice("Bearer ".length).trim();
+  }
+  const headerKey = req.headers["x-openclaw-key"];
+  return typeof headerKey === "string" ? headerKey.trim() : null;
+}
+
+function requireOpenClawAuth(req, res, next) {
+  const expectedKey = process.env.OPENCLAW_API_KEY;
+  if (!expectedKey) {
+    res.status(500).json({ error: "OPENCLAW_API_KEY is not configured" });
+    return;
+  }
+
+  const providedKey = getOpenClawApiKey(req);
+  if (!matchesApiKey(expectedKey, providedKey)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  next();
+}
+
 function validateRequiredString(value, field, errors) {
   if (typeof value !== "string" || value.trim().length === 0) {
     errors.push(`${field} is required`);
@@ -267,7 +301,7 @@ export function createApp({ dbPath, supabaseDbUrl } = {}) {
     });
   }));
 
-  app.post("/api/sync/activity", asyncRoute(async (_req, res) => {
+  app.post("/api/sync/activity", requireOpenClawAuth, asyncRoute(async (_req, res) => {
     await simulateSyncTick(store);
     res.json(await buildSnapshot(store));
   }));
@@ -276,7 +310,7 @@ export function createApp({ dbPath, supabaseDbUrl } = {}) {
     res.json(await store.listAgents());
   }));
 
-  app.patch("/api/agents/:id", asyncRoute(async (req, res) => {
+  app.patch("/api/agents/:id", requireOpenClawAuth, asyncRoute(async (req, res) => {
     const errors = [];
     const status = validateEnum(req.body.status, "status", AGENT_STATUSES, errors);
     const name = validateOptionalString(req.body.name, "name", errors);
@@ -323,7 +357,7 @@ export function createApp({ dbPath, supabaseDbUrl } = {}) {
     res.json(tasks);
   }));
 
-  app.post("/api/tasks", asyncRoute(async (req, res) => {
+  app.post("/api/tasks", requireOpenClawAuth, asyncRoute(async (req, res) => {
     const errors = [];
     const title = validateRequiredString(req.body.title, "title", errors);
     const description = validateOptionalString(req.body.description, "description", errors);
@@ -361,7 +395,7 @@ export function createApp({ dbPath, supabaseDbUrl } = {}) {
     res.status(201).json(task);
   }));
 
-  app.patch("/api/tasks/:id", asyncRoute(async (req, res) => {
+  app.patch("/api/tasks/:id", requireOpenClawAuth, asyncRoute(async (req, res) => {
     const errors = [];
     const title = validateOptionalString(req.body.title, "title", errors);
     const description = validateOptionalString(req.body.description, "description", errors);
@@ -420,7 +454,7 @@ export function createApp({ dbPath, supabaseDbUrl } = {}) {
     res.json(await store.listMessages());
   }));
 
-  app.post("/api/messages", asyncRoute(async (req, res) => {
+  app.post("/api/messages", requireOpenClawAuth, asyncRoute(async (req, res) => {
     const errors = [];
     const from = validateEnum(req.body.from, "from", AGENT_IDS, errors, { required: true });
     const to = validateEnum(req.body.to, "to", AGENT_IDS, errors, { required: true });

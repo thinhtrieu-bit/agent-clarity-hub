@@ -12,6 +12,7 @@
 Backend:
 
 ```bash
+OPENCLAW_API_KEY=[GENERATE-A-LONG-RANDOM-SECRET]
 SUPABASE_DB_URL=postgresql://postgres:[YOUR-PASSWORD]@db.zvcyolyidfbskawtrkcm.supabase.co:5432/postgres
 ```
 
@@ -81,6 +82,12 @@ Compatibility/read endpoints:
 
 - `GET /api/openclaw/snapshot`
 - `GET /api/openclaw/changes?cursor=<cursor>&limit=<n>`
+
+Authentication:
+
+- Every write request must include `Authorization: Bearer <OPENCLAW_API_KEY>`
+- If OpenClaw cannot send bearer auth, you can use `x-openclaw-key: <OPENCLAW_API_KEY>` instead
+- Read endpoints stay public unless you add separate gateway auth in front of the service
 
 Payload validation rules:
 
