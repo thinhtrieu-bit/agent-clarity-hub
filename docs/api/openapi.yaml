@@ -1,0 +1,476 @@
+openapi: 3.1.0
+info:
+  title: Agent Clarity Hub API
+  version: 1.0.0
+  description: |
+    OpenClaw writes to these REST endpoints. Backend persists to Supabase.
+    Dashboard reads from Supabase tables and receives realtime updates.
+    Validation errors return HTTP 400 with { error, details[] }.
+servers:
+  - url: http://localhost:8787
+security:
+  - OpenClawBearerAuth: []
+  - OpenClawHeaderKey: []
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /api/snapshot:
+    get:
+      summary: Read full activity snapshot
+      responses:
+        "200":
+          description: Full snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSnapshot"
+  /api/openclaw/snapshot:
+    get:
+      summary: OpenClaw full snapshot
+      responses:
+        "200":
+          description: Full snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSnapshot"
+  /api/openclaw/changes:
+    get:
+      summary: Incremental OpenClaw change feed
+      parameters:
+        - in: query
+          name: cursor
+          schema:
+            type: string
+            default: "0"
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          description: Cursor-based change response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChangeItem"
+                  nextCursor:
+                    type: string
+                  hasMore:
+                    type: boolean
+                  serverTime:
+                    type: string
+                    format: date-time
+  /api/sync/activity:
+    post:
+      summary: Simulate sync tick and persist updates
+      security:
+        - OpenClawBearerAuth: []
+        - OpenClawHeaderKey: []
+      responses:
+        "200":
+          description: Updated snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSnapshot"
+        "401":
+          description: Missing or invalid OpenClaw API key
+        "500":
+          description: OPENCLAW_API_KEY is not configured
+  /api/agents:
+    get:
+      summary: List agents
+      responses:
+        "200":
+          description: Agent list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Agent"
+  /api/agents/{id}:
+    patch:
+      summary: Update agent
+      security:
+        - OpenClawBearerAuth: []
+        - OpenClawHeaderKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentUpdateInput"
+      responses:
+        "200":
+          description: Updated agent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "400":
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid OpenClaw API key
+        "500":
+          description: OPENCLAW_API_KEY is not configured
+        "404":
+          description: Agent not found
+  /api/tasks:
+    get:
+      summary: List tasks
+      parameters:
+        - in: query
+          name: agent
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Task list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+    post:
+      summary: Create task
+      security:
+        - OpenClawBearerAuth: []
+        - OpenClawHeaderKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskCreateInput"
+      responses:
+        "201":
+          description: Created task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "400":
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid OpenClaw API key
+        "500":
+          description: OPENCLAW_API_KEY is not configured
+  /api/tasks/{id}:
+    patch:
+      summary: Update task
+      security:
+        - OpenClawBearerAuth: []
+        - OpenClawHeaderKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskUpdateInput"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "400":
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid OpenClaw API key
+        "500":
+          description: OPENCLAW_API_KEY is not configured
+        "404":
+          description: Task not found
+  /api/messages:
+    get:
+      summary: List messages
+      responses:
+        "200":
+          description: Message list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+    post:
+      summary: Create message
+      security:
+        - OpenClawBearerAuth: []
+        - OpenClawHeaderKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageCreateInput"
+      responses:
+        "201":
+          description: Created message
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+        "401":
+          description: Missing or invalid OpenClaw API key
+        "500":
+          description: OPENCLAW_API_KEY is not configured
+  /api/emails:
+    get:
+      summary: List email activities
+      responses:
+        "200":
+          description: Email list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Email"
+  /api/events:
+    get:
+      summary: List events
+      responses:
+        "200":
+          description: Event list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+components:
+  securitySchemes:
+    OpenClawBearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API key
+      description: Send the shared `OPENCLAW_API_KEY` as `Authorization: Bearer <key>`.
+    OpenClawHeaderKey:
+      type: apiKey
+      in: header
+      name: x-openclaw-key
+      description: Alternate header for clients that cannot set bearer auth.
+  schemas:
+    AgentId:
+      type: string
+      enum: [josh, joey, steve, hulk]
+    AgentStatus:
+      type: string
+      enum: [idle, active, waiting]
+    TaskStatus:
+      type: string
+      enum: [queued, in_progress, waiting, blocked, completed]
+    MessageType:
+      type: string
+      enum: [handoff, query, response]
+    Agent:
+      type: object
+      additionalProperties: true
+    Task:
+      type: object
+      additionalProperties: true
+    Message:
+      type: object
+      additionalProperties: true
+    Email:
+      type: object
+      additionalProperties: true
+    Event:
+      type: object
+      additionalProperties: true
+    ChangeItem:
+      type: object
+      properties:
+        cursor:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: string
+        operation:
+          type: string
+        payload:
+          type: object
+          additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
+    DashboardSnapshot:
+      type: object
+      properties:
+        agents:
+          type: array
+          items:
+            $ref: "#/components/schemas/Agent"
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        emails:
+          type: array
+          items:
+            $ref: "#/components/schemas/Email"
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
+        metrics:
+          type: object
+          additionalProperties: true
+        syncedAt:
+          type: string
+          format: date-time
+    AgentUpdateInput:
+      type: object
+      properties:
+        status:
+          $ref: "#/components/schemas/AgentStatus"
+        name:
+          type: string
+        role:
+          type: string
+        avatarColor:
+          type: string
+        currentTaskId:
+          type: string
+          nullable: true
+        lastActiveAt:
+          type: string
+          format: date-time
+        capabilities:
+          type: array
+          items:
+            type: string
+    TaskCreateInput:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        assignedAgent:
+          $ref: "#/components/schemas/AgentId"
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+    TaskUpdateInput:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        assignedAgent:
+          $ref: "#/components/schemas/AgentId"
+        stage:
+          $ref: "#/components/schemas/AgentId"
+        status:
+          $ref: "#/components/schemas/TaskStatus"
+        completedAt:
+          type: string
+          format: date-time
+        handoffNote:
+          type: string
+        handoffs:
+          type: array
+          items:
+            type: object
+            required: [from, to, at, note]
+            properties:
+              from:
+                $ref: "#/components/schemas/AgentId"
+              to:
+                $ref: "#/components/schemas/AgentId"
+              at:
+                type: string
+                format: date-time
+              note:
+                type: string
+    MessageCreateInput:
+      type: object
+      required: [from, to, content, taskId]
+      properties:
+        from:
+          $ref: "#/components/schemas/AgentId"
+        to:
+          $ref: "#/components/schemas/AgentId"
+        content:
+          type: string
+        taskId:
+          type: string
+        type:
+          $ref: "#/components/schemas/MessageType"
+    ValidationError:
+      type: object
+      required: [error, details]
+      properties:
+        error:
+          type: string
+          example: Invalid request payload
+        details:
+          type: array
+          items:
+            type: string
