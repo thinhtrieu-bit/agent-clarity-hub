@@ -1,8 +1,13 @@
 import cors from "cors";
 import express from "express";
 import { pathToFileURL } from "node:url";
-import { createStore } from "./db.js";
+import { createStore } from "./store-factory.js";
 import { AGENT_NAME_BY_ID, STAGE_ORDER } from "./seed-data.js";
+
+const AGENT_IDS = new Set(STAGE_ORDER);
+const AGENT_STATUSES = new Set(["idle", "active", "waiting"]);
+const TASK_STATUSES = new Set(["queued", "in_progress", "waiting", "blocked", "completed"]);
+const MESSAGE_TYPES = new Set(["handoff", "query", "response"]);
 
 function nowIso() {
   return new Date().toISOString();
@@ -29,12 +34,12 @@ function buildMetrics(tasks, messages, emails) {
   };
 }
 
-export function buildSnapshot(store) {
-  const agents = store.listAgents();
-  const tasks = store.listTasks();
-  const messages = store.listMessages();
-  const emails = store.listEmails();
-  const events = store.listEvents();
+export async function buildSnapshot(store) {
+  const agents = await store.listAgents();
+  const tasks = await store.listTasks();
+  const messages = await store.listMessages();
+  const emails = await store.listEmails();
+  const events = await store.listEvents();
 
   return {
     agents,
@@ -47,9 +52,9 @@ export function buildSnapshot(store) {
   };
 }
 
-function addEvent(store, event) {
-  store.upsertEvent(event);
-  store.appendChange("event", event.id, "sync", event, event.timestamp || nowIso());
+async function addEvent(store, event) {
+  await store.upsertEvent(event);
+  await store.appendChange("event", event.id, "sync", event, event.timestamp || nowIso());
 }
 
 function createTaskFilter(query) {
@@ -60,24 +65,26 @@ function createTaskFilter(query) {
   };
 }
 
-export function simulateSyncTick(store) {
+export async function simulateSyncTick(store) {
   const now = nowIso();
   const randomAgent = STAGE_ORDER[Math.floor(Math.random() * STAGE_ORDER.length)];
-  const agents = store.listAgents();
-  const tasks = store.listTasks();
+  const agents = await store.listAgents();
+  const tasks = await store.listTasks();
 
-  agents.forEach((agent) => {
-    const nextAgent =
-      agent.id === randomAgent
-        ? { ...agent, status: "active", lastActiveAt: now }
-        : agent.status === "active"
-          ? { ...agent, status: "waiting" }
-          : agent;
-    store.upsertAgent(nextAgent);
-    store.appendChange("agent", nextAgent.id, "sync", nextAgent, now);
-  });
+  await Promise.all(
+    agents.map(async (agent) => {
+      const nextAgent =
+        agent.id === randomAgent
+          ? { ...agent, status: "active", lastActiveAt: now }
+          : agent.status === "active"
+            ? { ...agent, status: "waiting" }
+            : agent;
+      await store.upsertAgent(nextAgent);
+      await store.appendChange("agent", nextAgent.id, "sync", nextAgent, now);
+    }),
+  );
 
-  addEvent(store, {
+  await addEvent(store, {
     id: generateId("EVT-heartbeat"),
     timestamp: now,
     category: "agent",
@@ -93,9 +100,9 @@ export function simulateSyncTick(store) {
 
   if (currentIndex === STAGE_ORDER.length - 1) {
     const completedTask = { ...movingTask, status: "completed", completedAt: now, updatedAt: now };
-    store.upsertTask(completedTask);
-    store.appendChange("task", completedTask.id, "sync", completedTask, now);
-    addEvent(store, {
+    await store.upsertTask(completedTask);
+    await store.appendChange("task", completedTask.id, "sync", completedTask, now);
+    await addEvent(store, {
       id: generateId("EVT-complete"),
       timestamp: now,
       category: "task",
@@ -122,8 +129,8 @@ export function simulateSyncTick(store) {
     status: "in_progress",
     updatedAt: now,
   };
-  store.upsertTask(updatedTask);
-  store.appendChange("task", updatedTask.id, "sync", updatedTask, now);
+  await store.upsertTask(updatedTask);
+  await store.appendChange("task", updatedTask.id, "sync", updatedTask, now);
 
   const message = {
     id: generateId("MSG"),
@@ -134,10 +141,10 @@ export function simulateSyncTick(store) {
     timestamp: now,
     type: "handoff",
   };
-  store.upsertMessage(message);
-  store.appendChange("message", message.id, "sync", message, now);
+  await store.upsertMessage(message);
+  await store.appendChange("message", message.id, "sync", message, now);
 
-  addEvent(store, {
+  await addEvent(store, {
     id: generateId("EVT-task"),
     timestamp: now,
     category: "task",
@@ -146,9 +153,91 @@ export function simulateSyncTick(store) {
   });
 }
 
-export function createApp({ dbPath } = {}) {
+function asyncRoute(handler) {
+  return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
+}
+
+function validateRequiredString(value, field, errors) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    errors.push(`${field} is required`);
+    return null;
+  }
+  return value.trim();
+}
+
+function validateOptionalString(value, field, errors) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (typeof value !== "string") {
+    errors.push(`${field} must be a string`);
+    return undefined;
+  }
+  return value;
+}
+
+function validateEnum(value, field, allowedValues, errors, { required = false } = {}) {
+  if (value === undefined) {
+    if (required) {
+      errors.push(`${field} is required`);
+    }
+    return undefined;
+  }
+  if (typeof value !== "string" || !allowedValues.has(value)) {
+    errors.push(`${field} must be one of: ${Array.from(allowedValues).join(", ")}`);
+    return undefined;
+  }
+  return value;
+}
+
+function validateOptionalTimestamp(value, field, errors) {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || Number.isNaN(Date.parse(value))) {
+    errors.push(`${field} must be a valid ISO timestamp`);
+    return undefined;
+  }
+  return value;
+}
+
+function validateOptionalStringArray(value, field, errors) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    errors.push(`${field} must be an array of strings`);
+    return undefined;
+  }
+  return value;
+}
+
+function validateOptionalHandoffs(value, errors) {
+  if (value === undefined) return undefined;
+  if (
+    !Array.isArray(value) ||
+    value.some(
+      (handoff) =>
+        !handoff ||
+        typeof handoff !== "object" ||
+        !AGENT_IDS.has(handoff.from) ||
+        !AGENT_IDS.has(handoff.to) ||
+        typeof handoff.note !== "string" ||
+        typeof handoff.at !== "string" ||
+        Number.isNaN(Date.parse(handoff.at)),
+    )
+  ) {
+    errors.push("handoffs must be an array of valid handoff objects");
+    return undefined;
+  }
+  return value;
+}
+
+function sendValidationError(res, errors) {
+  res.status(400).json({
+    error: "Invalid request payload",
+    details: errors,
+  });
+}
+
+export function createApp({ dbPath, supabaseDbUrl } = {}) {
   const app = express();
-  const store = createStore({ dbPath });
+  const store = createStore({ dbPath, supabaseDbUrl });
   app.locals.store = store;
 
   app.use(cors());
@@ -158,50 +247,68 @@ export function createApp({ dbPath } = {}) {
     res.json({ status: "ok" });
   });
 
-  app.get("/api/snapshot", (_req, res) => {
-    res.json(buildSnapshot(store));
-  });
+  app.get("/api/snapshot", asyncRoute(async (_req, res) => {
+    res.json(await buildSnapshot(store));
+  }));
 
-  app.get("/api/openclaw/snapshot", (_req, res) => {
-    res.json(buildSnapshot(store));
-  });
+  app.get("/api/openclaw/snapshot", asyncRoute(async (_req, res) => {
+    res.json(await buildSnapshot(store));
+  }));
 
-  app.get("/api/openclaw/changes", (req, res) => {
+  app.get("/api/openclaw/changes", asyncRoute(async (req, res) => {
     const cursor = typeof req.query.cursor === "string" ? req.query.cursor : "0";
     const limit = typeof req.query.limit === "string" ? req.query.limit : "100";
-    const changes = store.listChanges({ cursor, limit });
+    const changes = await store.listChanges({ cursor, limit });
     res.json({
       items: changes.items,
       nextCursor: changes.nextCursor,
       hasMore: changes.hasMore,
       serverTime: nowIso(),
     });
-  });
+  }));
 
-  app.post("/api/sync/activity", (_req, res) => {
-    simulateSyncTick(store);
-    res.json(buildSnapshot(store));
-  });
+  app.post("/api/sync/activity", asyncRoute(async (_req, res) => {
+    await simulateSyncTick(store);
+    res.json(await buildSnapshot(store));
+  }));
 
-  app.get("/api/agents", (_req, res) => {
-    res.json(store.listAgents());
-  });
+  app.get("/api/agents", asyncRoute(async (_req, res) => {
+    res.json(await store.listAgents());
+  }));
 
-  app.patch("/api/agents/:id", (req, res) => {
-    const agent = store.getAgentById(req.params.id);
+  app.patch("/api/agents/:id", asyncRoute(async (req, res) => {
+    const errors = [];
+    const status = validateEnum(req.body.status, "status", AGENT_STATUSES, errors);
+    const name = validateOptionalString(req.body.name, "name", errors);
+    const role = validateOptionalString(req.body.role, "role", errors);
+    const avatarColor = validateOptionalString(req.body.avatarColor, "avatarColor", errors);
+    const currentTaskId = validateOptionalString(req.body.currentTaskId, "currentTaskId", errors);
+    const lastActiveAt = validateOptionalTimestamp(req.body.lastActiveAt, "lastActiveAt", errors);
+    const capabilities = validateOptionalStringArray(req.body.capabilities, "capabilities", errors);
+    if (errors.length > 0) {
+      sendValidationError(res, errors);
+      return;
+    }
+
+    const agent = await store.getAgentById(req.params.id);
     if (!agent) {
       res.status(404).json({ error: "Agent not found" });
       return;
     }
     const updated = {
       ...agent,
-      ...req.body,
-      lastActiveAt: req.body.lastActiveAt ?? nowIso(),
+      ...(status !== undefined ? { status } : {}),
+      ...(name !== undefined ? { name } : {}),
+      ...(role !== undefined ? { role } : {}),
+      ...(avatarColor !== undefined ? { avatarColor } : {}),
+      ...(currentTaskId !== undefined ? { currentTaskId } : {}),
+      ...(capabilities !== undefined ? { capabilities } : {}),
+      lastActiveAt: lastActiveAt ?? nowIso(),
     };
-    store.upsertAgent(updated);
-    store.appendChange("agent", updated.id, "update", updated, updated.lastActiveAt);
+    await store.upsertAgent(updated);
+    await store.appendChange("agent", updated.id, "update", updated, updated.lastActiveAt);
 
-    addEvent(store, {
+    await addEvent(store, {
       id: generateId("EVT-agent"),
       timestamp: nowIso(),
       category: "agent",
@@ -209,31 +316,42 @@ export function createApp({ dbPath } = {}) {
       entities: [updated.id],
     });
     res.json(updated);
-  });
+  }));
 
-  app.get("/api/tasks", (req, res) => {
-    const tasks = store.listTasks().filter(createTaskFilter(req.query));
+  app.get("/api/tasks", asyncRoute(async (req, res) => {
+    const tasks = (await store.listTasks()).filter(createTaskFilter(req.query));
     res.json(tasks);
-  });
+  }));
 
-  app.post("/api/tasks", (req, res) => {
+  app.post("/api/tasks", asyncRoute(async (req, res) => {
+    const errors = [];
+    const title = validateRequiredString(req.body.title, "title", errors);
+    const description = validateOptionalString(req.body.description, "description", errors);
+    const assignedAgent = validateEnum(req.body.assignedAgent ?? "josh", "assignedAgent", AGENT_IDS, errors, {
+      required: true,
+    });
+    const status = validateEnum(req.body.status ?? "queued", "status", TASK_STATUSES, errors, { required: true });
+    if (errors.length > 0 || !title || !assignedAgent || !status) {
+      sendValidationError(res, errors);
+      return;
+    }
+
     const now = nowIso();
-    const assignedAgent = req.body.assignedAgent || "josh";
     const task = {
       id: generateId("TASK"),
-      title: req.body.title || "Untitled task",
-      description: req.body.description || "",
+      title,
+      description: description ?? "",
       stage: assignedAgent,
       assignedAgent,
-      status: req.body.status || "queued",
+      status,
       createdAt: now,
       updatedAt: now,
       handoffs: [],
     };
-    store.upsertTask(task);
-    store.appendChange("task", task.id, "create", task, now);
+    await store.upsertTask(task);
+    await store.appendChange("task", task.id, "create", task, now);
 
-    addEvent(store, {
+    await addEvent(store, {
       id: generateId("EVT-task"),
       timestamp: now,
       category: "task",
@@ -241,30 +359,54 @@ export function createApp({ dbPath } = {}) {
       entities: [task.id, assignedAgent],
     });
     res.status(201).json(task);
-  });
+  }));
 
-  app.patch("/api/tasks/:id", (req, res) => {
-    const task = store.getTaskById(req.params.id);
+  app.patch("/api/tasks/:id", asyncRoute(async (req, res) => {
+    const errors = [];
+    const title = validateOptionalString(req.body.title, "title", errors);
+    const description = validateOptionalString(req.body.description, "description", errors);
+    const assignedAgent = validateEnum(req.body.assignedAgent, "assignedAgent", AGENT_IDS, errors);
+    const stage = validateEnum(req.body.stage, "stage", AGENT_IDS, errors);
+    const status = validateEnum(req.body.status, "status", TASK_STATUSES, errors);
+    const completedAt = validateOptionalTimestamp(req.body.completedAt, "completedAt", errors);
+    const handoffs = validateOptionalHandoffs(req.body.handoffs, errors);
+    const handoffNote = validateOptionalString(req.body.handoffNote, "handoffNote", errors);
+    if (errors.length > 0) {
+      sendValidationError(res, errors);
+      return;
+    }
+
+    const task = await store.getTaskById(req.params.id);
     if (!task) {
       res.status(404).json({ error: "Task not found" });
       return;
     }
     const previousAgent = task.assignedAgent;
-    const nextAgent = req.body.assignedAgent || previousAgent;
-    const handoffs = [...(task.handoffs || [])];
+    const nextAgent = assignedAgent || previousAgent;
+    const nextHandoffs = [...(handoffs || task.handoffs || [])];
     if (nextAgent !== previousAgent) {
-      handoffs.push({
+      nextHandoffs.push({
         from: previousAgent,
         to: nextAgent,
         at: nowIso(),
-        note: req.body.handoffNote || "Manual reassignment via API.",
+        note: handoffNote || "Manual reassignment via API.",
       });
     }
-    const updated = { ...task, ...req.body, handoffs, updatedAt: nowIso() };
-    store.upsertTask(updated);
-    store.appendChange("task", updated.id, "update", updated, updated.updatedAt);
+    const updated = {
+      ...task,
+      ...(title !== undefined ? { title } : {}),
+      ...(description !== undefined ? { description } : {}),
+      ...(assignedAgent !== undefined ? { assignedAgent } : {}),
+      ...(stage !== undefined ? { stage } : assignedAgent !== undefined ? { stage: assignedAgent } : {}),
+      ...(status !== undefined ? { status } : {}),
+      ...(completedAt !== undefined ? { completedAt } : {}),
+      handoffs: nextHandoffs,
+      updatedAt: nowIso(),
+    };
+    await store.upsertTask(updated);
+    await store.appendChange("task", updated.id, "update", updated, updated.updatedAt);
 
-    addEvent(store, {
+    await addEvent(store, {
       id: generateId("EVT-task"),
       timestamp: nowIso(),
       category: "task",
@@ -272,26 +414,37 @@ export function createApp({ dbPath } = {}) {
       entities: [updated.id],
     });
     res.json(updated);
-  });
+  }));
 
-  app.get("/api/messages", (_req, res) => {
-    res.json(store.listMessages());
-  });
+  app.get("/api/messages", asyncRoute(async (_req, res) => {
+    res.json(await store.listMessages());
+  }));
 
-  app.post("/api/messages", (req, res) => {
+  app.post("/api/messages", asyncRoute(async (req, res) => {
+    const errors = [];
+    const from = validateEnum(req.body.from, "from", AGENT_IDS, errors, { required: true });
+    const to = validateEnum(req.body.to, "to", AGENT_IDS, errors, { required: true });
+    const content = validateRequiredString(req.body.content, "content", errors);
+    const taskId = validateRequiredString(req.body.taskId, "taskId", errors);
+    const type = validateEnum(req.body.type ?? "query", "type", MESSAGE_TYPES, errors, { required: true });
+    if (errors.length > 0 || !from || !to || !content || !taskId || !type) {
+      sendValidationError(res, errors);
+      return;
+    }
+
     const message = {
       id: generateId("MSG"),
-      from: req.body.from,
-      to: req.body.to,
-      content: req.body.content,
-      taskId: req.body.taskId,
+      from,
+      to,
+      content,
+      taskId,
       timestamp: nowIso(),
-      type: req.body.type || "query",
+      type,
     };
-    store.upsertMessage(message);
-    store.appendChange("message", message.id, "create", message, message.timestamp);
+    await store.upsertMessage(message);
+    await store.appendChange("message", message.id, "create", message, message.timestamp);
 
-    addEvent(store, {
+    await addEvent(store, {
       id: generateId("EVT-msg"),
       timestamp: message.timestamp,
       category: "message",
@@ -299,32 +452,39 @@ export function createApp({ dbPath } = {}) {
       entities: [message.id, message.taskId],
     });
     res.status(201).json(message);
-  });
+  }));
 
-  app.get("/api/emails", (_req, res) => {
-    res.json(store.listEmails());
-  });
+  app.get("/api/emails", asyncRoute(async (_req, res) => {
+    res.json(await store.listEmails());
+  }));
 
-  app.get("/api/events", (_req, res) => {
-    res.json(store.listEvents());
+  app.get("/api/events", asyncRoute(async (_req, res) => {
+    res.json(await store.listEvents());
+  }));
+
+  app.use((err, _req, res, _next) => {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error", detail: err?.message || "unknown error" });
   });
 
   return {
     app,
-    close: () => store.close(),
+    close: async () => {
+      await store.close();
+    },
   };
 }
 
-export function startServer({ port = Number(process.env.PORT || 8787), dbPath } = {}) {
-  const { app, close } = createApp({ dbPath });
+export function startServer({ port = Number(process.env.PORT || 8787), dbPath, supabaseDbUrl } = {}) {
+  const { app, close } = createApp({ dbPath, supabaseDbUrl });
   const server = app.listen(port, () => {
     console.log(`Agent activity API running on http://localhost:${port}`);
   });
   return {
     app,
-    close: () => {
-      server.close();
-      close();
+    close: async () => {
+      await new Promise((resolve) => server.close(resolve));
+      await close();
     },
   };
 }
