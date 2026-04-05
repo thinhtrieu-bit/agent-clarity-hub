@@ -3,18 +3,17 @@ import {
   createTask as apiCreateTask,
   DashboardSnapshot,
   getSnapshot,
-  syncActivity,
   updateAgent as apiUpdateAgent,
   updateTask as apiUpdateTask,
 } from "@/api/agent-activity-api";
 import { Agent, AgentTask } from "@/types/agent-types";
+import { supabase } from "@/integrations/supabase/client";
 
 type AgentActivityContextValue = {
   data: DashboardSnapshot | null;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
-  syncNow: () => Promise<void>;
   createTask: (input: { title: string; description?: string; assignedAgent?: string; status?: string }) => Promise<void>;
   updateTask: (taskId: string, input: Partial<AgentTask>) => Promise<void>;
   updateAgent: (agentId: string, input: Partial<Agent>) => Promise<void>;
@@ -39,16 +38,6 @@ export function AgentActivityProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const syncNow = async () => {
-    try {
-      setError(null);
-      const snapshot = await syncActivity();
-      setData(snapshot);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to sync activity");
-    }
-  };
-
   const createTask = async (input: { title: string; description?: string; assignedAgent?: string; status?: string }) => {
     await apiCreateTask(input);
     await refresh();
@@ -67,12 +56,18 @@ export function AgentActivityProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh();
 
-    const interval = window.setInterval(() => {
-      void syncNow();
-    }, 6000);
+    // Subscribe to realtime changes on all 5 tables
+    const channel = supabase
+      .channel("dashboard-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "agents" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "emails" }, () => void refresh())
+      .on("postgres_changes", { event: "*", schema: "public", table: "events" }, () => void refresh())
+      .subscribe();
 
     return () => {
-      window.clearInterval(interval);
+      supabase.removeChannel(channel);
     };
   }, []);
 
@@ -82,7 +77,6 @@ export function AgentActivityProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       refresh,
-      syncNow,
       createTask,
       updateTask,
       updateAgent,
