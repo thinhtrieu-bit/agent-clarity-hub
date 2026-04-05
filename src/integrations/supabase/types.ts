@@ -14,7 +14,162 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      agents: {
+        Row: {
+          avatar_color: string
+          capabilities: Json
+          current_task_id: string | null
+          id: string
+          last_active_at: string
+          name: string
+          role: string
+          status: string
+        }
+        Insert: {
+          avatar_color: string
+          capabilities?: Json
+          current_task_id?: string | null
+          id: string
+          last_active_at?: string
+          name: string
+          role: string
+          status?: string
+        }
+        Update: {
+          avatar_color?: string
+          capabilities?: Json
+          current_task_id?: string | null
+          id?: string
+          last_active_at?: string
+          name?: string
+          role?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      emails: {
+        Row: {
+          action: string
+          id: string
+          read_by: string
+          sender: string
+          status: string
+          subject: string
+          timestamp: string
+        }
+        Insert: {
+          action: string
+          id: string
+          read_by: string
+          sender: string
+          status?: string
+          subject: string
+          timestamp?: string
+        }
+        Update: {
+          action?: string
+          id?: string
+          read_by?: string
+          sender?: string
+          status?: string
+          subject?: string
+          timestamp?: string
+        }
+        Relationships: []
+      }
+      events: {
+        Row: {
+          category: string
+          entities: Json
+          id: string
+          summary: string
+          timestamp: string
+        }
+        Insert: {
+          category: string
+          entities?: Json
+          id: string
+          summary: string
+          timestamp?: string
+        }
+        Update: {
+          category?: string
+          entities?: Json
+          id?: string
+          summary?: string
+          timestamp?: string
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          content: string
+          from_agent: string
+          id: string
+          task_id: string
+          timestamp: string
+          to_agent: string
+          type: string
+        }
+        Insert: {
+          content: string
+          from_agent: string
+          id: string
+          task_id: string
+          timestamp?: string
+          to_agent: string
+          type?: string
+        }
+        Update: {
+          content?: string
+          from_agent?: string
+          id?: string
+          task_id?: string
+          timestamp?: string
+          to_agent?: string
+          type?: string
+        }
+        Relationships: []
+      }
+      tasks: {
+        Row: {
+          assigned_agent: string
+          completed_at: string | null
+          created_at: string
+          description: string | null
+          handoffs: Json
+          id: string
+          stage: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_agent: string
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          handoffs?: Json
+          id: string
+          stage: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_agent?: string
+          completed_at?: string | null
+          created_at?: string
+          description?: string | null
+          handoffs?: Json
+          id?: string
+          stage?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
