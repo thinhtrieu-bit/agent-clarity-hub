@@ -369,7 +369,7 @@ export function useMockDashboardData() {
           {
             id: `EVT-task-${Date.now()}`,
             timestamp: ts,
-            category: "task",
+            category: "task" as const,
             summary: `${target.id} moved from ${agentNameById[target.assignedAgent]} to ${agentNameById[nextStage]}.`,
             entities: [target.id, target.assignedAgent, nextStage],
           },
