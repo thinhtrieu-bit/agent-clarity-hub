@@ -86,8 +86,8 @@ export default function TasksPage() {
             </select>
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm text-muted-foreground">{filtered.length} tasks shown</span>
-              <Button variant="outline" size="sm" onClick={() => void syncNow()}>
-                Sync
+              <Button variant="outline" size="sm" onClick={() => void refresh()}>
+                Refresh
               </Button>
             </div>
           </div>
