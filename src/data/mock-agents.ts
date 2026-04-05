@@ -325,7 +325,7 @@ export function useMockDashboardData() {
             {
               id: `EVT-task-done-${Date.now()}`,
               timestamp: ts,
-              category: "task",
+              category: "task" as const,
               summary: `${doneTask.id} completed by Hulk.`,
               entities: [doneTask.id, "hulk"],
             },
