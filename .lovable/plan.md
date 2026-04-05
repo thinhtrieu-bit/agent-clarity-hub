@@ -1,105 +1,86 @@
 
 
-# Agent Monitoring Dashboard
+# Migrate to Supabase Backend
 
 ## Overview
 
-A real-time monitoring dashboard for your multi-agent system (Josh, Joey, Steve, Hulk) that visualizes agent activity, inter-agent conversations, task pipelines, and integration activity like email reads.
-
-## Architecture
-
-Since no agent backend is connected yet, the dashboard will be built with a clean data layer (TypeScript types + mock data) that can be swapped for real API/WebSocket connections later.
+Replace the local Express server (`server/index.js`) and mock data layer (`src/data/mock-agents.ts`) with Supabase tables and real-time subscriptions. OpenClaw will call Supabase directly via REST, and the dashboard will reflect changes instantly using Supabase Realtime.
 
 ```text
-┌─────────────────────────────────────────────────┐
-│                  Dashboard Layout                │
-├──────────┬──────────────────────────────────────┤
-│ Sidebar  │  Main Content Area                    │
-│          │  ┌──────────────────────────────────┐ │
-│ • Overview│  │ Agent Status Cards (4 agents)    │ │
-│ • Agents │  │ [Josh] [Joey] [Steve] [Hulk]     │ │
-│ • Tasks  │  ├──────────────────────────────────┤ │
-│ • Comms  │  │ Live Activity Feed               │ │
-│ • Emails │  │ (scrolling timeline of events)   │ │
-│ • Settings│ ├──────────────────────────────────┤ │
-│          │  │ Task Pipeline / Conversation View │ │
-│          │  └──────────────────────────────────┘ │
-└──────────┴──────────────────────────────────────┘
+OpenClaw agents ──POST/PATCH──► Supabase REST API
+                                    │
+                                    ▼
+                              Supabase Tables
+                              (agents, tasks, messages, emails, events)
+                                    │
+                              Realtime subscriptions
+                                    │
+                                    ▼
+                              Dashboard (React)
 ```
 
-## Pages & Components
+## Step 1: Enable Lovable Cloud + Create Tables
 
-### 1. Overview Page (`/`)
-- **Agent Status Cards** — each agent (Josh, Joey, Steve, Hulk) with status indicator (idle/active/waiting), current task, last active timestamp
-- **Pipeline Visualization** — horizontal flow diagram: Josh → Joey → Steve → Hulk showing which stage a task is in
-- **Key Metrics** — tasks completed today, avg pipeline time, active conversations, emails processed
+Set up Lovable Cloud (Supabase integration) and create 5 tables via migration:
 
-### 2. Agents Page (`/agents`)
-- Detailed view per agent: role description, capabilities, current state
-- Activity history per agent
-- Click into any agent for a detail panel
+- **agents** — id (text PK), name, role, status, avatar_color, capabilities (jsonb), current_task_id, last_active_at
+- **tasks** — id (text PK), title, description, stage, assigned_agent, status, created_at, updated_at, completed_at, handoffs (jsonb)
+- **messages** — id (text PK), from_agent, to_agent, content, task_id, timestamp, type
+- **emails** — id (text PK), subject, sender, read_by, timestamp, action, status
+- **events** — id (text PK), timestamp, category, summary, entities (jsonb)
 
-### 3. Tasks Page (`/tasks`)
-- Table of all tasks with columns: ID, title, current stage, assigned agent, status, created, updated
-- Filter by agent, status, date range
-- Click a task to see its full journey through the pipeline with timestamps at each handoff
+All tables get RLS disabled initially (or open read/write policies) so OpenClaw can write via the anon/service key and the dashboard can read freely.
 
-### 4. Conversations Page (`/conversations`)
-- Thread view showing inter-agent messages
-- Each message shows: sender agent, recipient agent, timestamp, content, context passed
-- Filter by agent pair or task
+## Step 2: Seed Initial Data
 
-### 5. Email Monitor Page (`/emails`)
-- List of emails read/processed with: subject, from, read by (agent), timestamp, action taken
-- Status badges: read, processed, flagged, ignored
+Insert the same seed data currently in `server/index.js` (4 agents, 4 tasks, 5 messages, 4 emails, 4 events) into the new tables.
 
-### 6. Settings Page (`/settings`)
-- Agent configuration (roles, permissions, governance rules)
-- Pipeline order configuration
-- Notification preferences
+## Step 3: Replace API Client with Supabase Client
 
-## Data Layer
+Rewrite `src/api/agent-activity-api.ts` to use the Supabase JS client instead of `fetch()` calls to localhost:8787:
 
-**Types** (`src/types/agent-types.ts`):
-- `Agent` — id, name, role, status, avatar color, capabilities
-- `AgentTask` — id, title, description, stage, assignedAgent, status, timestamps, handoffs
-- `AgentMessage` — id, from, to, content, taskId, timestamp, type (handoff/query/response)
-- `EmailActivity` — id, subject, from, readBy, timestamp, action, status
+- `getSnapshot()` → parallel queries to all 5 tables + compute metrics client-side
+- `createTask()` → `supabase.from('tasks').insert()`
+- `updateTask()` → `supabase.from('tasks').update()`
+- `updateAgent()` → `supabase.from('agents').update()`
+- Remove `syncActivity()` (no longer needed; real data comes from OpenClaw writes)
 
-**Mock data** (`src/data/mock-agents.ts`): Realistic sample data for all four agents with sample tasks flowing through the pipeline, conversations, and email activities. Includes a simulated "live" effect using intervals.
+## Step 4: Add Realtime Subscriptions
 
-## Technical Details
+Update `AgentActivityProvider` to subscribe to Supabase Realtime on all 5 tables. When a row changes (INSERT/UPDATE/DELETE), refresh the snapshot automatically. This replaces the 6-second polling interval.
 
-- **Routing**: 6 routes added to App.tsx
-- **Layout**: Sidebar using shadcn Sidebar component with NavLink for active state
-- **UI components**: Cards, Tables, Badges, Tabs, Avatars (all existing shadcn)
-- **Charts**: Pipeline progress bars and status indicators using Tailwind utilities
-- **Animations**: Pulse indicators for active agents, smooth transitions for feed updates
-- **Colors**: Each agent gets a distinct accent color for easy identification
-- **Responsive**: Works on the current 1311px viewport, collapses sidebar on mobile
+## Step 5: Fix Build Errors + Clean Up
 
-## Files to Create/Modify
+- Fix the TypeScript errors in `mock-agents.ts` by adding `as const` assertions for `category`, `type`, and `status` literals (needed even if mock data becomes secondary)
+- Keep `mock-agents.ts` as a fallback/demo mode but make Supabase the default
+- Remove or archive `server/index.js` (no longer needed)
 
-1. `src/types/agent-types.ts` — Type definitions
-2. `src/data/mock-agents.ts` — Mock data + simulated live updates
-3. `src/components/layout/DashboardLayout.tsx` — Sidebar + main area layout
-4. `src/components/dashboard/AgentStatusCard.tsx` — Individual agent card
-5. `src/components/dashboard/PipelineView.tsx` — Josh→Joey→Steve→Hulk flow
-6. `src/components/dashboard/ActivityFeed.tsx` — Scrolling event timeline
-7. `src/components/dashboard/ConversationThread.tsx` — Agent-to-agent messages
-8. `src/components/dashboard/TaskDetail.tsx` — Task journey view
-9. `src/pages/Dashboard.tsx` — Overview page
-10. `src/pages/AgentsPage.tsx` — Agent details
-11. `src/pages/TasksPage.tsx` — Task table + detail
-12. `src/pages/ConversationsPage.tsx` — Message threads
-13. `src/pages/EmailMonitorPage.tsx` — Email tracking
-14. `src/pages/SettingsPage.tsx` — Configuration
-15. `src/App.tsx` — Add routes + wrap in SidebarProvider
+## Step 6: Expose Supabase REST Endpoints for OpenClaw
 
-## Future Integration Points
+Document the Supabase REST API endpoints that OpenClaw should call:
 
-The mock data layer is designed so that when you're ready to connect real agent systems, you replace the mock functions with:
-- WebSocket connections for real-time agent status
-- API calls to your agent orchestrator for task/conversation data
-- Gmail/email API integration for email monitoring
+```text
+POST   /rest/v1/tasks      — create task
+PATCH  /rest/v1/tasks?id=eq.TASK-101  — update task
+POST   /rest/v1/messages   — log agent message
+POST   /rest/v1/events     — log activity event
+PATCH  /rest/v1/agents?id=eq.josh     — update agent status
+```
+
+OpenClaw uses the Supabase URL + anon key (or service role key) with standard PostgREST headers.
+
+## Files Modified/Created
+
+1. **Migration** — `supabase/migrations/create_agent_tables.sql` (5 tables + seed data)
+2. **`src/integrations/supabase/`** — auto-generated client (Lovable Cloud handles this)
+3. **`src/api/agent-activity-api.ts`** — rewrite to use Supabase client
+4. **`src/context/AgentActivityProvider.tsx`** — add Realtime subscriptions, remove polling
+5. **`src/data/mock-agents.ts`** — fix TS errors with `as const` assertions
+6. **`server/index.js`** — archived/removed
+
+## Technical Notes
+
+- Metrics (tasks completed, avg pipeline time, etc.) computed client-side from query results — same logic as current `buildMetrics()`
+- `handoffs` stored as JSONB array on the tasks table — no separate join table needed
+- Realtime channel subscribes to `postgres_changes` on all 5 tables with `event: '*'`
 
