@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAgentActivity } from "@/context/AgentActivityProvider";
 
 export default function TasksPage() {
-  const { data, loading, error, createTask, updateTask, syncNow } = useAgentActivity();
+  const { data, loading, error, createTask, updateTask } = useAgentActivity();
   const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>(undefined);
   const [agentFilter, setAgentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");

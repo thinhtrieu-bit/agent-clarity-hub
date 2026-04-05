@@ -391,7 +391,7 @@ export function useMockDashboardData() {
             readBy: mailAgent,
             timestamp: ts,
             action: "Parsed and routed to active pipeline.",
-            status: "read",
+            status: "read" as const,
           },
           ...current,
         ].slice(0, 40));
