@@ -296,9 +296,9 @@ export function useMockDashboardData() {
         {
           id: `EVT-live-${Date.now()}`,
           timestamp: ts,
-          category: "agent",
+          category: "agent" as const,
           summary: `${agentNameById[randomAgentId]} heartbeat acknowledged by orchestrator.`,
-          entities: [randomAgentId],
+          entities: [randomAgentId] as string[],
         },
         ...current,
       ].slice(0, 30));
