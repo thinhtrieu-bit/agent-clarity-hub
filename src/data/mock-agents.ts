@@ -360,7 +360,7 @@ export function useMockDashboardData() {
             content: `Task ${target.id} handed off with updated context.`,
             taskId: target.id,
             timestamp: ts,
-            type: "handoff",
+            type: "handoff" as const,
           },
           ...messageCurrent,
         ].slice(0, 80));
