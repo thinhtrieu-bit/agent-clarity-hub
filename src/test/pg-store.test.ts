@@ -92,17 +92,21 @@ describe("Postgres-backed store", () => {
     resetState();
   });
 
-  it("bootstraps schema on first use and returns seeded snapshot data", async () => {
+  it("bootstraps schema on first use without inserting mock seed data", async () => {
     const { createPostgresStore } = await import("../../server/pg-store.js");
-    const { buildSnapshot } = await import("../../server/index.js");
 
     const store = createPostgresStore({ connectionString: "postgresql://postgres:secret@db.example.co:5432/postgres" });
-    const snapshot = await buildSnapshot(store);
+    const [agents, tasks, messages, events] = await Promise.all([
+      store.listAgents(),
+      store.listTasks(),
+      store.listMessages(),
+      store.listEvents(),
+    ]);
 
-    expect(snapshot.agents.length).toBeGreaterThan(0);
-    expect(snapshot.tasks.length).toBeGreaterThan(0);
-    expect(snapshot.messages.length).toBeGreaterThan(0);
-    expect(snapshot.events.length).toBeGreaterThan(0);
+    expect(agents).toEqual([]);
+    expect(tasks).toEqual([]);
+    expect(messages).toEqual([]);
+    expect(events).toEqual([]);
     expect(queryLog.some((entry) => entry.includes("CREATE TABLE IF NOT EXISTS agents"))).toBe(true);
     expect(queryLog.some((entry) => entry.includes("CREATE TABLE IF NOT EXISTS change_log"))).toBe(true);
 

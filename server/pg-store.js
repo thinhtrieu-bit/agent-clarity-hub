@@ -1,6 +1,5 @@
 import pg from "pg";
 import dns from "node:dns/promises";
-import { SEED_AGENTS, SEED_EMAILS, SEED_EVENTS, SEED_MESSAGES, SEED_TASKS } from "./seed-data.js";
 
 const { Pool } = pg;
 
@@ -117,16 +116,6 @@ export function createPostgresStore({ connectionString }) {
       `),
       );
 
-      const count = async (table) => {
-        const res = await withPool((pool) => pool.query(`SELECT COUNT(*)::int AS c FROM ${table}`));
-        return res.rows[0].c;
-      };
-
-      if ((await count("agents")) === 0) await Promise.all(SEED_AGENTS.map((item) => upsertById("agents", item)));
-      if ((await count("tasks")) === 0) await Promise.all(SEED_TASKS.map((item) => upsertById("tasks", item)));
-      if ((await count("messages")) === 0) await Promise.all(SEED_MESSAGES.map((item) => upsertById("messages", item)));
-      if ((await count("emails")) === 0) await Promise.all(SEED_EMAILS.map((item) => upsertById("emails", item)));
-      if ((await count("events")) === 0) await Promise.all(SEED_EVENTS.map((item) => upsertById("events", item)));
     })();
     return initPromise;
   };

@@ -1,11 +1,4 @@
 import Database from "better-sqlite3";
-import {
-  SEED_AGENTS,
-  SEED_EMAILS,
-  SEED_EVENTS,
-  SEED_MESSAGES,
-  SEED_TASKS,
-} from "./seed-data.js";
 
 function nowIso() {
   return new Date().toISOString();
@@ -61,8 +54,6 @@ export function createStore({ dbPath = process.env.AGENT_DB_PATH || "server/agen
     );
   `);
 
-  const countTable = (name) => db.prepare(`SELECT COUNT(*) AS c FROM ${name}`).get().c;
-
   const upsertByIdStmt = (table) =>
     db.prepare(`
       INSERT INTO ${table} (id, payload_json, created_at, updated_at)
@@ -93,15 +84,6 @@ export function createStore({ dbPath = process.env.AGENT_DB_PATH || "server/agen
     fillCursorStmt.run(cursor, info.lastInsertRowid);
     return cursor;
   };
-
-  const seedIfEmpty = () => {
-    if (!countTable("agents")) SEED_AGENTS.forEach((item) => putEntity("agents", item));
-    if (!countTable("tasks")) SEED_TASKS.forEach((item) => putEntity("tasks", item));
-    if (!countTable("messages")) SEED_MESSAGES.forEach((item) => putEntity("messages", item));
-    if (!countTable("emails")) SEED_EMAILS.forEach((item) => putEntity("emails", item));
-    if (!countTable("events")) SEED_EVENTS.forEach((item) => putEntity("events", item));
-  };
-  seedIfEmpty();
 
   const selectAllDescByUpdated = (table) =>
     parseRows(db.prepare(`SELECT payload_json FROM ${table} ORDER BY datetime(updated_at) DESC`).all());

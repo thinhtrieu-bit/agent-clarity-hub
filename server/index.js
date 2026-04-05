@@ -302,6 +302,10 @@ export function createApp({ dbPath, supabaseDbUrl } = {}) {
   }));
 
   app.post("/api/sync/activity", requireOpenClawAuth, asyncRoute(async (_req, res) => {
+    if (process.env.ALLOW_SYNTHETIC_SYNC !== "true") {
+      res.status(403).json({ error: "Synthetic sync is disabled" });
+      return;
+    }
     await simulateSyncTick(store);
     res.json(await buildSnapshot(store));
   }));

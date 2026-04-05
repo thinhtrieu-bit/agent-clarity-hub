@@ -46,8 +46,9 @@ Dashboard behavior:
 - Reads all activity tables directly from Supabase.
 - Subscribes to Supabase Realtime channels for instant updates.
 - OpenClaw and manual actions should write through REST API endpoints.
-- The API bootstraps the core tables automatically on first connection to Supabase.
+- The API bootstraps table schema only. It does not seed mock activity rows.
 - All write endpoints require `Authorization: Bearer <OPENCLAW_API_KEY>`.
+- Synthetic sync endpoint is disabled by default (`ALLOW_SYNTHETIC_SYNC=false`).
 
 4. In Supabase SQL Editor, run the RLS + Realtime setup from `docs/supabase-setup.md`.
 
@@ -71,7 +72,7 @@ npm run api      # API only
 - `GET /api/snapshot`
 - `GET /api/openclaw/snapshot`
 - `GET /api/openclaw/changes?cursor=<cursor>&limit=<n>`
-- `POST /api/sync/activity`
+- `POST /api/sync/activity` (disabled unless `ALLOW_SYNTHETIC_SYNC=true`)
 
 ### Agents
 

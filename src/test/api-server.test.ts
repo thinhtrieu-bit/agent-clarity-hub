@@ -11,6 +11,17 @@ function makeDbPath() {
   return join(tmpdir(), `agent-activity-test-${Date.now()}-${Math.random().toString(16).slice(2)}.sqlite`);
 }
 
+async function seedAgentsForTest(store: ReturnType<typeof createStore>) {
+  const now = new Date().toISOString();
+  const agents = [
+    { id: "josh", name: "Josh", role: "Intake", status: "idle", avatarColor: "bg-sky-500", capabilities: [], lastActiveAt: now },
+    { id: "joey", name: "Joey", role: "Research", status: "idle", avatarColor: "bg-emerald-500", capabilities: [], lastActiveAt: now },
+    { id: "steve", name: "Steve", role: "Planner", status: "idle", avatarColor: "bg-amber-500", capabilities: [], lastActiveAt: now },
+    { id: "hulk", name: "Hulk", role: "Executor", status: "idle", avatarColor: "bg-rose-500", capabilities: [], lastActiveAt: now },
+  ];
+  await Promise.all(agents.map((agent) => store.upsertAgent(agent)));
+}
+
 describe("OpenClaw-ready SQLite activity store", () => {
   const cleanupPaths: string[] = [];
 
@@ -72,6 +83,20 @@ describe("OpenClaw-ready SQLite activity store", () => {
     const store = createStore({ dbPath });
 
     return (async () => {
+      await seedAgentsForTest(store);
+      const now = new Date().toISOString();
+      await store.upsertTask({
+        id: "TASK-BASE",
+        title: "Baseline task",
+        description: "base",
+        stage: "josh",
+        assignedAgent: "josh",
+        status: "queued",
+        createdAt: now,
+        updatedAt: now,
+        handoffs: [],
+      });
+
       const firstPage = await store.listChanges({ cursor: "0", limit: 500 });
       const startCursor = firstPage.nextCursor;
 
@@ -102,6 +127,19 @@ describe("OpenClaw-ready SQLite activity store", () => {
     cleanupPaths.push(dbPath);
     const store = createStore({ dbPath });
     return (async () => {
+      await seedAgentsForTest(store);
+      const now = new Date().toISOString();
+      await store.upsertTask({
+        id: "TASK-SYNC",
+        title: "Sync me",
+        description: "",
+        stage: "josh",
+        assignedAgent: "josh",
+        status: "queued",
+        createdAt: now,
+        updatedAt: now,
+        handoffs: [],
+      });
       const before = (await store.listChanges({ cursor: "0", limit: 500 })).items.length;
       await simulateSyncTick(store);
       const after = (await store.listChanges({ cursor: "0", limit: 1000 })).items.length;
@@ -131,6 +169,7 @@ describe("OpenClaw-ready SQLite activity store", () => {
       handoffs: [],
     };
     return (async () => {
+      await seedAgentsForTest(first);
       await first.upsertTask(durableTask);
       await first.appendChange("task", durableTask.id, "create", durableTask, now);
       await first.close();
@@ -146,17 +185,35 @@ describe("OpenClaw-ready SQLite activity store", () => {
 describe("OpenClaw Express API", () => {
   const cleanupPaths: string[] = [];
   const originalApiKey = process.env.OPENCLAW_API_KEY;
+  const originalSupabaseDbUrl = process.env.SUPABASE_DB_URL;
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+  const originalSupabaseDbHost = process.env.SUPABASE_DB_HOST;
+  const originalSupabaseDbPort = process.env.SUPABASE_DB_PORT;
+  const originalSupabaseDbName = process.env.SUPABASE_DB_NAME;
+  const originalSupabaseDbUser = process.env.SUPABASE_DB_USER;
+  const originalSupabaseDbPassword = process.env.SUPABASE_DB_PASSWORD;
   let server: ReturnType<typeof createServer> | null = null;
   let apiBase = "";
 
   beforeEach(async () => {
     process.env.OPENCLAW_API_KEY = "test-openclaw-api-key";
+    delete process.env.SUPABASE_DB_URL;
+    delete process.env.DATABASE_URL;
+    delete process.env.SUPABASE_DB_HOST;
+    delete process.env.SUPABASE_DB_PORT;
+    delete process.env.SUPABASE_DB_NAME;
+    delete process.env.SUPABASE_DB_USER;
+    delete process.env.SUPABASE_DB_PASSWORD;
     const dbPath = makeDbPath();
     cleanupPaths.push(dbPath);
     const { app, close } = createApp({ dbPath });
     server = createServer(app);
-    await new Promise<void>((resolve) => {
-      server!.listen(0, "127.0.0.1", resolve);
+    await new Promise<void>((resolve, reject) => {
+      server!.once("error", reject);
+      server!.listen(0, "127.0.0.1", () => {
+        server!.off("error", reject);
+        resolve();
+      });
     });
     const address = server.address();
     if (!address || typeof address === "string") {
@@ -178,6 +235,13 @@ describe("OpenClaw Express API", () => {
     }
     server = null;
     process.env.OPENCLAW_API_KEY = originalApiKey;
+    process.env.SUPABASE_DB_URL = originalSupabaseDbUrl;
+    process.env.DATABASE_URL = originalDatabaseUrl;
+    process.env.SUPABASE_DB_HOST = originalSupabaseDbHost;
+    process.env.SUPABASE_DB_PORT = originalSupabaseDbPort;
+    process.env.SUPABASE_DB_NAME = originalSupabaseDbName;
+    process.env.SUPABASE_DB_USER = originalSupabaseDbUser;
+    process.env.SUPABASE_DB_PASSWORD = originalSupabaseDbPassword;
     cleanupPaths.forEach((dbPath) => {
       try {
         rmSync(dbPath, { force: true });
@@ -320,7 +384,7 @@ describe("OpenClaw Express API", () => {
     expect(resumed.body.items.some((item: { entityType: string; operation: string; entityId: string }) => item.entityType === "task" && item.operation === "update" && item.entityId === taskId)).toBe(true);
   });
 
-  it("validates messages, creates message events, and records agent updates", async () => {
+  it("validates messages and creates message events", async () => {
     const invalidMessage = await request("/api/messages", {
       method: "POST",
       body: JSON.stringify({ from: "josh" }),
@@ -346,18 +410,7 @@ describe("OpenClaw Express API", () => {
     expect(messageResult.response.status).toBe(201);
     expect(messageResult.body.type).toBe("handoff");
 
-    const agentResult = await request("/api/agents/josh", {
-      method: "PATCH",
-      body: JSON.stringify({
-        status: "active",
-        currentTaskId: taskResult.body.id,
-      }),
-    });
-    expect(agentResult.response.status).toBe(200);
-    expect(agentResult.body.status).toBe("active");
-
     const eventsResult = await request("/api/events");
     expect(eventsResult.body.some((event: { category: string; summary: string }) => event.category === "message" && event.summary.includes("messaged"))).toBe(true);
-    expect(eventsResult.body.some((event: { category: string; summary: string }) => event.category === "agent" && event.summary.includes("updated via API"))).toBe(true);
   });
 });

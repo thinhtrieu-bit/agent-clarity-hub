@@ -96,6 +96,8 @@ paths:
                 $ref: "#/components/schemas/DashboardSnapshot"
         "401":
           description: Missing or invalid OpenClaw API key
+        "403":
+          description: Synthetic sync is disabled unless ALLOW_SYNTHETIC_SYNC=true
         "500":
           description: OPENCLAW_API_KEY is not configured
   /api/agents:
