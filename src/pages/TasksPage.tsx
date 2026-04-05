@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAgentActivity } from "@/context/AgentActivityProvider";
 
 export default function TasksPage() {
-  const { data, loading, error, createTask, updateTask, syncNow } = useAgentActivity();
+  const { data, loading, error, createTask, updateTask, refresh } = useAgentActivity();
   const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>(undefined);
   const [agentFilter, setAgentFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -86,8 +86,8 @@ export default function TasksPage() {
             </select>
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm text-muted-foreground">{filtered.length} tasks shown</span>
-              <Button variant="outline" size="sm" onClick={() => void syncNow()}>
-                Sync
+              <Button variant="outline" size="sm" onClick={() => void refresh()}>
+                Refresh
               </Button>
             </div>
           </div>

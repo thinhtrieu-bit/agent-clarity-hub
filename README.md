@@ -26,11 +26,11 @@ npm run dev:full
 cp .env.example .env
 ```
 
-2. Set your Supabase Postgres URL in `.env`:
+2. Set your Supabase env vars in `.env`:
 ```bash
 OPENCLAW_API_KEY=[GENERATE-A-LONG-RANDOM-SECRET]
-SUPABASE_DB_URL=postgresql://postgres:[YOUR-PASSWORD]@db.zvcyolyidfbskawtrkcm.supabase.co:5432/postgres
-VITE_SUPABASE_URL=https://zvcyolyidfbskawtrkcm.supabase.co
+SUPABASE_DB_URL=postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres
+VITE_SUPABASE_URL=https://[YOUR-PROJECT-REF].supabase.co
 VITE_SUPABASE_ANON_KEY=[YOUR-ANON-KEY]
 ```
 
@@ -39,8 +39,7 @@ VITE_SUPABASE_ANON_KEY=[YOUR-ANON-KEY]
 npm run api
 ```
 
-When `SUPABASE_DB_URL` is set, backend storage uses Supabase Postgres.
-When it is not set, backend falls back to local SQLite.
+When `SUPABASE_DB_URL` is set, backend storage uses Supabase Postgres. When it is not set, backend falls back to local SQLite.
 
 Dashboard behavior:
 
@@ -70,9 +69,9 @@ npm run api      # API only
 ### Snapshot + Sync
 
 - `GET /api/snapshot`
-- `POST /api/sync/activity`
 - `GET /api/openclaw/snapshot`
 - `GET /api/openclaw/changes?cursor=<cursor>&limit=<n>`
+- `POST /api/sync/activity`
 
 ### Agents
 
@@ -95,7 +94,7 @@ npm run api      # API only
 - `GET /api/emails`
 - `GET /api/events`
 
-### OpenClaw write examples
+### OpenClaw Write Examples
 
 Create a task:
 
@@ -139,6 +138,6 @@ curl -X PATCH http://localhost:8787/api/tasks/TASK-123 \
   }'
 ```
 
-For full request/response schema, use `docs/api/openapi.yaml`.
-
 If OpenClaw cannot set the `Authorization` header, the API also accepts `x-openclaw-key: <OPENCLAW_API_KEY>` on write requests.
+
+For full request/response schema, use `docs/api/openapi.yaml`.

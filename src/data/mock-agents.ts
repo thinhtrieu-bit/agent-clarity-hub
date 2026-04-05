@@ -296,9 +296,9 @@ export function useMockDashboardData() {
         {
           id: `EVT-live-${Date.now()}`,
           timestamp: ts,
-          category: "agent",
+          category: "agent" as const,
           summary: `${agentNameById[randomAgentId]} heartbeat acknowledged by orchestrator.`,
-          entities: [randomAgentId],
+          entities: [randomAgentId] as string[],
         },
         ...current,
       ].slice(0, 30));
@@ -325,7 +325,7 @@ export function useMockDashboardData() {
             {
               id: `EVT-task-done-${Date.now()}`,
               timestamp: ts,
-              category: "task",
+              category: "task" as const,
               summary: `${doneTask.id} completed by Hulk.`,
               entities: [doneTask.id, "hulk"],
             },
@@ -360,7 +360,7 @@ export function useMockDashboardData() {
             content: `Task ${target.id} handed off with updated context.`,
             taskId: target.id,
             timestamp: ts,
-            type: "handoff",
+            type: "handoff" as const,
           },
           ...messageCurrent,
         ].slice(0, 80));
@@ -369,7 +369,7 @@ export function useMockDashboardData() {
           {
             id: `EVT-task-${Date.now()}`,
             timestamp: ts,
-            category: "task",
+            category: "task" as const,
             summary: `${target.id} moved from ${agentNameById[target.assignedAgent]} to ${agentNameById[nextStage]}.`,
             entities: [target.id, target.assignedAgent, nextStage],
           },
@@ -391,7 +391,7 @@ export function useMockDashboardData() {
             readBy: mailAgent,
             timestamp: ts,
             action: "Parsed and routed to active pipeline.",
-            status: "read",
+            status: "read" as const,
           },
           ...current,
         ].slice(0, 40));

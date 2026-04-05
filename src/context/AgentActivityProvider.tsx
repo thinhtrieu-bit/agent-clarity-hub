@@ -3,19 +3,17 @@ import {
   createTask as apiCreateTask,
   DashboardSnapshot,
   getSnapshot,
-  syncActivity as apiSyncActivity,
   updateAgent as apiUpdateAgent,
   updateTask as apiUpdateTask,
 } from "@/api/agent-activity-api";
 import { Agent, AgentMessage, AgentTask, EmailActivity, ActivityEvent } from "@/types/agent-types";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/integrations/supabase/client";
 
 type AgentActivityContextValue = {
   data: DashboardSnapshot | null;
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
-  syncNow: () => Promise<void>;
   createTask: (input: { title: string; description?: string; assignedAgent?: string; status?: string }) => Promise<void>;
   updateTask: (taskId: string, input: Partial<AgentTask>) => Promise<void>;
   updateAgent: (agentId: string, input: Partial<Agent>) => Promise<void>;
@@ -78,7 +76,6 @@ export function AgentActivityProvider({ children }: { children: ReactNode }) {
           syncedAt: new Date().toISOString(),
         });
       } else {
-        // Fallback keeps the app usable when Supabase env vars are not configured.
         const snapshot = await getSnapshot();
         setData(snapshot);
       }
@@ -88,16 +85,6 @@ export function AgentActivityProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }, []);
-
-  const syncNow = useCallback(async () => {
-    try {
-      setError(null);
-      await apiSyncActivity();
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to sync activity");
-    }
-  }, [refresh]);
 
   const createTask = useCallback(async (input: { title: string; description?: string; assignedAgent?: string; status?: string }) => {
     await apiCreateTask(input);
@@ -118,12 +105,7 @@ export function AgentActivityProvider({ children }: { children: ReactNode }) {
     void refresh();
 
     if (!supabase) {
-      const interval = window.setInterval(() => {
-        void apiSyncActivity().then(refresh).catch(() => {});
-      }, 6000);
-      return () => {
-        window.clearInterval(interval);
-      };
+      return;
     }
 
     const scheduleRefresh = () => {
@@ -158,12 +140,11 @@ export function AgentActivityProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       refresh,
-      syncNow,
       createTask,
       updateTask,
       updateAgent,
     }),
-    [createTask, data, error, loading, refresh, syncNow, updateAgent, updateTask],
+    [createTask, data, error, loading, refresh, updateAgent, updateTask],
   );
 
   return <AgentActivityContext.Provider value={value}>{children}</AgentActivityContext.Provider>;

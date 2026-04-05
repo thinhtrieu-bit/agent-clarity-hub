@@ -1,74 +1,159 @@
-import { Agent, AgentMessage, AgentTask } from "@/types/agent-types";
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8787/api";
+import { supabase } from "@/integrations/supabase/client";
+import { Tables, TablesUpdate } from "@/integrations/supabase/types";
+import { Agent, AgentMessage, AgentTask, ActivityEvent, EmailActivity, DashboardMetrics } from "@/types/agent-types";
+import { getDashboardMetrics } from "@/data/mock-agents";
 
 export interface DashboardSnapshot {
   agents: Agent[];
   tasks: AgentTask[];
   messages: AgentMessage[];
-  emails: {
-    id: string;
-    subject: string;
-    from: string;
-    readBy: "josh" | "joey" | "steve" | "hulk";
-    timestamp: string;
-    action: string;
-    status: "read" | "processed" | "flagged" | "ignored";
-  }[];
-  events: {
-    id: string;
-    timestamp: string;
-    category: "agent" | "task" | "message" | "email";
-    summary: string;
-    entities: string[];
-  }[];
-  metrics: {
-    tasksCompletedToday: number;
-    avgPipelineTimeMinutes: number;
-    activeConversations: number;
-    emailsProcessed: number;
-  };
+  emails: EmailActivity[];
+  events: ActivityEvent[];
+  metrics: DashboardMetrics;
   syncedAt: string;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
-    ...init,
-  });
+type AgentRow = Tables<"agents">;
+type TaskRow = Tables<"tasks">;
+type MessageRow = Tables<"messages">;
+type EmailRow = Tables<"emails">;
+type EventRow = Tables<"events">;
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `API error ${response.status}`);
+function requireSupabase() {
+  if (!supabase) {
+    throw new Error("Supabase client is not configured");
   }
-  return response.json() as Promise<T>;
+  return supabase;
 }
 
-export function getSnapshot() {
-  return request<DashboardSnapshot>("/snapshot");
+function mapAgent(row: AgentRow): Agent {
+  return {
+    id: row.id,
+    name: row.name,
+    role: row.role,
+    status: row.status,
+    avatarColor: row.avatar_color,
+    capabilities: Array.isArray(row.capabilities) ? row.capabilities.filter((value): value is string => typeof value === "string") : [],
+    currentTaskId: row.current_task_id ?? undefined,
+    lastActiveAt: row.last_active_at,
+  };
 }
 
-export function syncActivity() {
-  return request<DashboardSnapshot>("/sync/activity", { method: "POST" });
+function mapTask(row: TaskRow): AgentTask {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description ?? "",
+    stage: row.stage,
+    assignedAgent: row.assigned_agent,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    completedAt: row.completed_at ?? undefined,
+    handoffs: Array.isArray(row.handoffs) ? row.handoffs as AgentTask["handoffs"] : [],
+  };
 }
 
-export function createTask(input: { title: string; description?: string; assignedAgent?: string; status?: string }) {
-  return request<AgentTask>("/tasks", {
-    method: "POST",
-    body: JSON.stringify(input),
+function mapMessage(row: MessageRow): AgentMessage {
+  return {
+    id: row.id,
+    from: row.from_agent,
+    to: row.to_agent,
+    content: row.content,
+    taskId: row.task_id,
+    timestamp: row.timestamp,
+    type: row.type,
+  };
+}
+
+function mapEmail(row: EmailRow): EmailActivity {
+  return {
+    id: row.id,
+    subject: row.subject,
+    from: row.sender,
+    readBy: row.read_by,
+    timestamp: row.timestamp,
+    action: row.action,
+    status: row.status,
+  };
+}
+
+function mapEvent(row: EventRow): ActivityEvent {
+  return {
+    id: row.id,
+    timestamp: row.timestamp,
+    category: row.category,
+    summary: row.summary,
+    entities: Array.isArray(row.entities) ? row.entities.filter((value): value is string => typeof value === "string") : [],
+  };
+}
+
+export async function getSnapshot(): Promise<DashboardSnapshot> {
+  const client = requireSupabase();
+  const [agentsRes, tasksRes, messagesRes, emailsRes, eventsRes] = await Promise.all([
+    client.from("agents").select("*"),
+    client.from("tasks").select("*").order("created_at", { ascending: false }),
+    client.from("messages").select("*").order("timestamp", { ascending: false }),
+    client.from("emails").select("*").order("timestamp", { ascending: false }),
+    client.from("events").select("*").order("timestamp", { ascending: false }).limit(30),
+  ]);
+
+  const agents = (agentsRes.data ?? []).map(mapAgent);
+  const tasks = (tasksRes.data ?? []).map(mapTask);
+  const messages = (messagesRes.data ?? []).map(mapMessage);
+  const emails = (emailsRes.data ?? []).map(mapEmail);
+  const events = (eventsRes.data ?? []).map(mapEvent);
+
+  return {
+    agents,
+    tasks,
+    messages,
+    emails,
+    events,
+    metrics: getDashboardMetrics(tasks, messages, emails),
+    syncedAt: new Date().toISOString(),
+  };
+}
+
+export async function createTask(input: { title: string; description?: string; assignedAgent?: string; status?: string }) {
+  const client = requireSupabase();
+  const id = `TASK-${Date.now()}`;
+  const { error } = await client.from("tasks").insert({
+    id,
+    title: input.title,
+    description: input.description ?? "",
+    stage: input.assignedAgent ?? "josh",
+    assigned_agent: input.assignedAgent ?? "josh",
+    status: input.status ?? "queued",
   });
+  if (error) throw new Error(error.message);
 }
 
-export function updateTask(taskId: string, input: Partial<AgentTask>) {
-  return request<AgentTask>(`/tasks/${taskId}`, {
-    method: "PATCH",
-    body: JSON.stringify(input),
-  });
+export async function updateTask(taskId: string, input: Partial<AgentTask>) {
+  const client = requireSupabase();
+  const update: TablesUpdate<"tasks"> = {};
+  if (input.title !== undefined) update.title = input.title;
+  if (input.description !== undefined) update.description = input.description;
+  if (input.stage !== undefined) update.stage = input.stage;
+  if (input.assignedAgent !== undefined) update.assigned_agent = input.assignedAgent;
+  if (input.status !== undefined) update.status = input.status;
+  if (input.completedAt !== undefined) update.completed_at = input.completedAt;
+  if (input.handoffs !== undefined) update.handoffs = input.handoffs;
+  update.updated_at = new Date().toISOString();
+
+  const { error } = await client.from("tasks").update(update).eq("id", taskId);
+  if (error) throw new Error(error.message);
 }
 
-export function updateAgent(agentId: string, input: Partial<Agent>) {
-  return request<Agent>(`/agents/${agentId}`, {
-    method: "PATCH",
-    body: JSON.stringify(input),
-  });
+export async function updateAgent(agentId: string, input: Partial<Agent>) {
+  const client = requireSupabase();
+  const update: TablesUpdate<"agents"> = {};
+  if (input.status !== undefined) update.status = input.status;
+  if (input.role !== undefined) update.role = input.role;
+  if (input.currentTaskId !== undefined) update.current_task_id = input.currentTaskId;
+  if (input.capabilities !== undefined) update.capabilities = input.capabilities;
+  update.last_active_at = new Date().toISOString();
+
+  const { error } = await client.from("agents").update(update).eq("id", agentId);
+  if (error) throw new Error(error.message);
 }
