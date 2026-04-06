@@ -10,10 +10,28 @@ const stageLabels: { id: TaskStage; label: string }[] = [
   { id: "hulk", label: "Hulk" },
 ];
 
+function formatStageLabel(stageId: string) {
+  return stageId
+    .split(/[_-\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 export default function PipelineView({ tasks }: { tasks: AgentTask[] }) {
   const focusedTask = tasks.find((task) => task.status === "in_progress") ?? tasks[0];
-  const activeIndex = stageLabels.findIndex((stage) => stage.id === focusedTask?.stage);
-  const progress = focusedTask ? ((activeIndex + 1) / stageLabels.length) * 100 : 0;
+  const dynamicStages = Array.from(
+    new Set([
+      ...stageLabels.map((stage) => stage.id),
+      ...tasks.map((task) => task.stage).filter(Boolean),
+    ]),
+  );
+  const displayStages = dynamicStages.map((stageId) => {
+    const known = stageLabels.find((stage) => stage.id === stageId);
+    return known ?? { id: stageId as TaskStage, label: formatStageLabel(stageId) };
+  });
+  const activeIndex = displayStages.findIndex((stage) => stage.id === focusedTask?.stage);
+  const progress = focusedTask && activeIndex >= 0 ? ((activeIndex + 1) / displayStages.length) * 100 : 0;
 
   return (
     <Card className="border-border/70">
@@ -26,7 +44,7 @@ export default function PipelineView({ tasks }: { tasks: AgentTask[] }) {
       <CardContent className="space-y-5">
         <Progress value={progress} className="h-2" />
         <div className="grid gap-3 md:grid-cols-4">
-          {stageLabels.map((stage, index) => {
+          {displayStages.map((stage, index) => {
             const isActive = activeIndex === index;
             const isDone = activeIndex > index;
             return (
@@ -46,7 +64,7 @@ export default function PipelineView({ tasks }: { tasks: AgentTask[] }) {
                     {isActive ? "Current stage" : isDone ? "Completed" : "Pending"}
                   </p>
                 </div>
-                {index < stageLabels.length - 1 && <ArrowRight className="h-4 w-4 text-muted-foreground" />}
+                {index < displayStages.length - 1 && <ArrowRight className="h-4 w-4 text-muted-foreground" />}
               </div>
             );
           })}

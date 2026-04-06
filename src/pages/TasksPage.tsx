@@ -34,6 +34,9 @@ export default function TasksPage() {
   });
 
   const selected = data.tasks.find((task) => task.id === selectedTaskId);
+  const agentOptions = Array.from(new Set(data.agents.map((agent) => agent.id)));
+  const statusOptions = Array.from(new Set(data.tasks.map((task) => task.status)));
+  const defaultAssignee = agentOptions[0] ?? "josh";
 
   return (
     <div className="space-y-4">
@@ -58,7 +61,7 @@ export default function TasksPage() {
             <Button
               onClick={async () => {
                 if (!newTaskTitle.trim()) return;
-                await createTask({ title: newTaskTitle.trim(), description: newTaskDescription.trim(), assignedAgent: "josh" });
+                await createTask({ title: newTaskTitle.trim(), description: newTaskDescription.trim(), assignedAgent: defaultAssignee });
                 setNewTaskTitle("");
                 setNewTaskDescription("");
               }}
@@ -71,18 +74,19 @@ export default function TasksPage() {
             <Input placeholder="Search task ID or title" value={query} onChange={(e) => setQuery(e.target.value)} />
             <select className="rounded-md border bg-background px-3 text-sm" value={agentFilter} onChange={(e) => setAgentFilter(e.target.value)}>
               <option value="all">All agents</option>
-              <option value="josh">Josh</option>
-              <option value="joey">Joey</option>
-              <option value="steve">Steve</option>
-              <option value="hulk">Hulk</option>
+              {agentOptions.map((agentId) => (
+                <option key={agentId} value={agentId}>
+                  {agentId}
+                </option>
+              ))}
             </select>
             <select className="rounded-md border bg-background px-3 text-sm" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
               <option value="all">All status</option>
-              <option value="queued">Queued</option>
-              <option value="in_progress">In Progress</option>
-              <option value="waiting">Waiting</option>
-              <option value="blocked">Blocked</option>
-              <option value="completed">Completed</option>
+              {statusOptions.map((status) => (
+                <option key={status} value={status}>
+                  {status.replaceAll("_", " ")}
+                </option>
+              ))}
             </select>
             <div className="flex items-center justify-between gap-2">
               <span className="text-sm text-muted-foreground">{filtered.length} tasks shown</span>

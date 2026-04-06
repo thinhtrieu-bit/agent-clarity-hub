@@ -6,7 +6,7 @@ import { useAgentActivity } from "@/context/AgentActivityProvider";
 
 export default function AgentsPage() {
   const { data, loading, error } = useAgentActivity();
-  const [selectedId, setSelectedId] = useState("josh");
+  const [selectedId, setSelectedId] = useState("");
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">Loading agents...</p>;

@@ -1,14 +1,16 @@
-import { AgentId, AgentMessage } from "@/types/agent-types";
+import { AgentMessage } from "@/types/agent-types";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-const agentNames: Record<AgentId, string> = {
-  josh: "Josh",
-  joey: "Joey",
-  steve: "Steve",
-  hulk: "Hulk",
-};
+function formatAgentName(id: string) {
+  if (!id) return "Unknown";
+  return id
+    .split(/[_-\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 export default function ConversationThread({
   messages,
@@ -43,9 +45,9 @@ export default function ConversationThread({
                   <Badge variant="outline" className="capitalize">
                     {message.type}
                   </Badge>
-                  <span>{agentNames[message.from]}</span>
+                  <span>{formatAgentName(message.from)}</span>
                   <span>→</span>
-                  <span>{agentNames[message.to]}</span>
+                  <span>{formatAgentName(message.to)}</span>
                   <span>·</span>
                   <span>{message.taskId}</span>
                   <span>·</span>

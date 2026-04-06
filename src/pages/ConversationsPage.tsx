@@ -1,20 +1,33 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import ConversationThread from "@/components/dashboard/ConversationThread";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAgentActivity } from "@/context/AgentActivityProvider";
 
-const pairOptions = [
-  { value: "all", label: "All pairs" },
-  { value: "josh-joey", label: "Josh ↔ Joey" },
-  { value: "joey-steve", label: "Joey ↔ Steve" },
-  { value: "steve-hulk", label: "Steve ↔ Hulk" },
-  { value: "josh-hulk", label: "Josh ↔ Hulk" },
-];
+function formatAgentName(id: string) {
+  return id
+    .split(/[_-\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 export default function ConversationsPage() {
   const { data, loading, error } = useAgentActivity();
   const [pair, setPair] = useState("all");
   const [taskId, setTaskId] = useState("all");
+  const pairOptions = useMemo(() => {
+    const pairs = Array.from(new Set((data?.messages ?? []).map((message) => `${message.from}-${message.to}`)));
+    return [
+      { value: "all", label: "All pairs" },
+      ...pairs.map((pairValue) => {
+        const [from, to] = pairValue.split("-");
+        return {
+          value: pairValue,
+          label: `${formatAgentName(from)} ↔ ${formatAgentName(to)}`,
+        };
+      }),
+    ];
+  }, [data?.messages]);
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">Loading conversations...</p>;
