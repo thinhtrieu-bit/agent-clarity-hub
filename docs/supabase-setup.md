@@ -4,8 +4,8 @@
 
 1. OpenClaw sends updates to REST API (`/api/tasks`, `/api/messages`, `/api/agents/:id`).
 2. API persists to Supabase Postgres tables.
-3. Dashboard reads rows directly from Supabase (`agents`, `tasks`, `messages`, `emails`, `events`).
-4. Dashboard subscribes to Supabase Realtime channels and refreshes instantly on changes.
+3. Dashboard reads snapshot data from REST API (`/api/snapshot`).
+4. API returns data sourced from Supabase-backed storage.
 
 ## Required Environment Variables
 
@@ -19,8 +19,8 @@ SUPABASE_DB_URL=postgresql://postgres:[YOUR-PASSWORD]@db.zvcyolyidfbskawtrkcm.su
 Frontend:
 
 ```bash
-VITE_SUPABASE_URL=https://zvcyolyidfbskawtrkcm.supabase.co
-VITE_SUPABASE_ANON_KEY=[YOUR-ANON-KEY]
+VITE_API_BASE_URL=http://localhost:8787/api
+VITE_OPENCLAW_API_KEY=[OPTIONAL-FOR-UI-WRITES]
 ```
 
 ## Tables Used
@@ -73,20 +73,6 @@ create policy "authenticated read emails" on emails for select to authenticated 
 create policy "authenticated read events" on events for select to authenticated using (true);
 ```
 
-## Realtime Setup
-
-Dashboard live refresh depends on Supabase Realtime being enabled for the five activity tables:
-
-```sql
-alter publication supabase_realtime add table agents;
-alter publication supabase_realtime add table tasks;
-alter publication supabase_realtime add table messages;
-alter publication supabase_realtime add table emails;
-alter publication supabase_realtime add table events;
-```
-
-If a table is already in the publication, Supabase will return an error for that individual statement. That is safe to ignore.
-
 ## OpenClaw Write Endpoints
 
 OpenClaw should write through the Express API, not directly to Supabase:
@@ -120,5 +106,5 @@ Successful writes update the durable entity row and append a `change_log` entry 
 Notes:
 
 - API writes use the Postgres connection string and are server-side.
-- Dashboard reads should use anon key + signed-in session (authenticated role).
-- If you need dashboard writes later, add explicit `insert/update` policies per table.
+- Dashboard reads are through API; frontend does not query Supabase directly.
+- UI write actions (if enabled) must send `VITE_OPENCLAW_API_KEY` and go through API auth.

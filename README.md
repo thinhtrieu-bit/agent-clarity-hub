@@ -4,7 +4,7 @@ Real-time monitoring dashboard for a multi-agent system (Josh, Joey, Steve, Hulk
 
 Architecture flow:
 
-`OpenClaw updates -> REST API writes -> Supabase tables update -> Dashboard reads from Supabase + Realtime`
+`OpenClaw updates -> REST API writes -> Supabase tables update -> Dashboard reads from REST API`
 
 ## Run
 
@@ -26,12 +26,12 @@ npm run dev:full
 cp .env.example .env
 ```
 
-2. Set your Supabase env vars in `.env`:
+2. Set env vars in `.env`:
 ```bash
 OPENCLAW_API_KEY=[GENERATE-A-LONG-RANDOM-SECRET]
 SUPABASE_DB_URL=postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres
-VITE_SUPABASE_URL=https://[YOUR-PROJECT-REF].supabase.co
-VITE_SUPABASE_ANON_KEY=[YOUR-ANON-KEY]
+VITE_API_BASE_URL=http://localhost:8787/api
+VITE_OPENCLAW_API_KEY=[OPTIONAL-FOR-UI-WRITES]
 ```
 
 3. Start API:
@@ -43,8 +43,9 @@ When `SUPABASE_DB_URL` is set, backend storage uses Supabase Postgres. When it i
 
 Dashboard behavior:
 
-- Reads all activity tables directly from Supabase.
-- Subscribes to Supabase Realtime channels for instant updates.
+- Reads all activity data from the Express API (`/api/snapshot`).
+- API is the single source of truth for frontend reads/writes.
+- Provider refreshes on interval for live updates.
 - OpenClaw and manual actions should write through REST API endpoints.
 - The API bootstraps table schema only. It does not seed mock activity rows.
 - All write endpoints require `Authorization: Bearer <OPENCLAW_API_KEY>`.
